@@ -1,0 +1,9 @@
+# Dependencies
+frontend/node_modules
+backend/node_modules
+
+# Large model files
+models/mistral-7b-v0.1.Q4_K_M.gguf
+
+# LLama.cpp
+backend/llama.cpp
