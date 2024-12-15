@@ -31,6 +31,7 @@ const ChatBox = ({ messages }) => {
           key={index}
           type={message.type}
           content={message.content}
+          responseTime={message.responseTime}
           showSpinner={message.type === 'assistant' && message.content === 'En train de réfléchir...'}
         />
       ))}

@@ -37,6 +37,7 @@ function App() {
 
   const handleSendMessage = async (message) => {
     setIsLoading(true);
+    const startTime = Date.now();
     
     setMessages(prev => [...prev, 
       { type: 'user', content: message },
@@ -53,10 +54,15 @@ function App() {
       });
       
       const data = await response.json();
+      const responseTime = ((Date.now() - startTime) / 1000).toFixed(2);
       
       setMessages(prev => {
         const newMessages = [...prev];
-        newMessages[newMessages.length - 1] = { type: 'assistant', content: data.response };
+        newMessages[newMessages.length - 1] = { 
+          type: 'assistant', 
+          content: data.response,
+          responseTime: responseTime 
+        };
         return newMessages;
       });
     } catch (error) {

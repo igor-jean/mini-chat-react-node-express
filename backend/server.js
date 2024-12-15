@@ -20,12 +20,12 @@ app.use(express.json());
 const model = new LlamaModel({
     modelPath: path.resolve(__dirname, '..', 'models', 'mistral-7b-v0.1.Q4_K_M.gguf'),  // Chemin vers le fichier du modèle
     enableLogging: true,      // Active les logs
-    contextSize: 8192,        // Taille du contexte en tokens
-    threads: 8,               // Nombre de threads pour le traitement
+    contextSize: 32768,        // Taille du contexte en tokens
+    threads: 7,               // Nombre de threads pour le traitement
     batchSize: 512,          // Taille du lot pour le traitement
     mainGpu: 0,              // Utilisation du GPU principal
     embeddingMode: false,    // Mode embedding désactivé
-    gpuLayers: 32,           // Nombre de couches sur GPU
+    gpuLayers: 35,           // Nombre de couches sur GPU
     defaultContextFlashAttention: true  // Optimisation de l'attention
 });
 
@@ -42,7 +42,9 @@ let session = new LlamaChatSession({
     temperature: 0.7,        // Contrôle la créativité des réponses
     topK: 50,                // Limite le nombre de tokens considérés
     topP: 0.95,              // Contrôle la diversité des réponses
-    maxTokens: 1024,         // Nombre maximum de tokens générés
+    maxTokens: 2048,         // Nombre maximum de tokens générés
+    presencePenalty: 0.5,     // Entre -2 et 2 selon la doc
+    frequencyPenalty: 0.5,    // Entre -2 et 2 selon la doc
 });
 
 // Route POST pour le chat
@@ -75,14 +77,15 @@ app.post('/chat', async (req, res) => {
 
         // Génération de la réponse avec des paramètres spécifiques
         const response = await session.prompt(userPrompt, {
-            temperature: 0.8,
+            temperature: 0.3,
             topK: 50,
             topP: 0.95,
             maxTokens: 2048,
             stop: ["###", "<input>", "<system>"],  // Tokens d'arrêt
             repeatPenalty: 1.3,     // Pénalité pour les répétitions
-            presencePenalty: 0.3,   // Pénalité pour la présence de certains tokens
-            frequencyPenalty: 0.4   // Pénalité pour la fréquence des tokens
+            presencePenalty: 0.5,   // Pénalité pour la présence de certains tokens
+            frequencyPenalty: 0.5,   // Pénalité pour la fréquence des tokens
+            safe_prompt: true       // Ajouter la sécurité selon la doc
         });
 
         // Nettoyage de la réponse (suppression des balises et formatage)
