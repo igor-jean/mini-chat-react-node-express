@@ -64,7 +64,7 @@ app.post('/chat', async (req, res) => {
             },
             body: JSON.stringify({
                 prompt: fullPrompt,
-                temperature: 0.6,        // Légèrement plus créatif pour des réponses naturelles
+                temperature: 0.3,        // Légèrement plus créatif pour des réponses naturelles
                 top_p: 0.90,            // Contrôle de la diversité des réponses
                 top_k: 40,              // Valeur standard pour un bon équilibre
                 n_predict: 2048,        // Réponses assez longues

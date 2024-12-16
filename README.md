@@ -17,12 +17,12 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
     -   `Message` : Gère l'affichage des messages
     -   `MessageInput` : Gère la saisie des messages
 
-### Backend (Node.js/Express)
+### Backend (Node.js/Express + Llama.cpp)
 
 -   **Technologies principales** :
 
     -   Express.js
-    -   node-llama-cpp
+    -   llama.cpp
     -   CORS
 
 -   **Fonctionnalités** :
@@ -38,21 +38,27 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 -   Node.js v16+
 -   npm ou yarn
 -   Le modèle Mistral 7B (fichier .gguf)
+-   llama.cpp (serveur)
 
-### Configuration du Frontend
+## Démarrage de l'application
+
+L'application nécessite le démarrage de trois composants dans l'ordre suivant :
+
+1. **Serveur Llama.cpp** (dans le dossier llama.cpp) :
 
 ```bash
-cd frontend
-npm install
-npm start
+.\llama-server.exe --model ../models/mistral-7b-v0.1.Q4_K_M.gguf --ctx-size 2048 --n-gpu-layers 35 --port 8080
 ```
 
-### Configuration du Backend
+2. **Serveur Backend** (dans le dossier backend) :
 
 ```bash
-cd backend
-npm install
-# Placez le modèle Mistral dans le dossier /models
+node ./server.js
+```
+
+3. **Application Frontend** (dans le dossier frontend) :
+
+```bash
 npm start
 ```
 
@@ -61,7 +67,7 @@ npm start
 ```
 .
 ├── frontend/
-│   ├─��� src/
+│   ├── src/
 │   │   ├── components/
 │   │   ├── styles/
 │   │   └── App.js
@@ -69,8 +75,10 @@ npm start
 ├── backend/
 │   ├── server.js
 │   └── package.json
-└── models/
-    └── mistral-7b-v0.1.Q4_K_M.gguf
+├── models/
+│   └── mistral-7b-v0.1.Q4_K_M.gguf
+└── llama.cpp/
+    └── llama-server.exe
 ```
 
 ## API Backend
@@ -88,10 +96,10 @@ npm start
 
 ## Configuration du modèle d'IA
 
-Le backend utilise le modèle Mistral 7B avec les paramètres suivants :
+Le modèle Mistral 7B est configuré avec les paramètres suivants :
 
--   Taille du contexte : 32768 tokens
--   Température : 0.7
--   Top-K : 50
--   Top-P : 0.95
--   Optimisation GPU activée
+-   Taille du contexte : 2048 tokens
+-   Température : 0.3
+-   Top-K : 40
+-   Top-P : 0.90
+-   Utilisation GPU : 35 couches

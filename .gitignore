@@ -5,5 +5,5 @@ backend/node_modules
 # Large model files
 models/mistral-7b-v0.1.Q4_K_M.gguf
 
-# LLama.cpp
-backend/llama.cpp
+# Ignorer tout le dossier llama.cpp et son contenu
+llama.cpp/

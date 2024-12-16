@@ -1,7 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 const MessageInput = ({ onSend, disabled }) => {
   const [message, setMessage] = useState('');
+  const inputRef = useRef(null);
+
+  // Effet pour gérer l'auto-focus
+  useEffect(() => {
+    if (!disabled && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [disabled]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -14,6 +22,7 @@ const MessageInput = ({ onSend, disabled }) => {
   return (
     <form onSubmit={handleSubmit} className="flex gap-3">
       <input
+        ref={inputRef}
         type="text"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
