@@ -1,61 +1,55 @@
 import React from 'react';
-import styled from 'styled-components';
 import ClipLoader from 'react-spinners/ClipLoader';
+import { Bot, User } from 'lucide-react';
 
-const MessageContainer = styled.div`
-  display: flex;
-  justify-content: ${props => props.type === 'user' ? 'flex-end' : 'flex-start'};
-  margin-bottom: 10px;
-`;
-
-const MessageContent = styled.div`
-  display: flex;
-  flex-direction: column;
-`;
-
-const MessageBubble = styled.div`
-  max-width: 100%;
-  padding: 10px 15px;
-  border-radius: 15px;
-  background-color: ${props => props.type === 'user' ? '#007bff' : '#ffffff'};
-  color: ${props => props.type === 'user' ? '#ffffff' : '#000000'};
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-`;
-
-const ResponseTime = styled.span`
-  font-size: 12px;
-  color: #666;
-  margin-top: 4px;
-  margin-left: 5px;
-`;
-
-const SpinnerContainer = styled.span`
-  height: 45px;
-  width: 45px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-`;
-
-const Message = ({ type, content, showSpinner, responseTime }) => {
+const Message = ({ type, content, showSpinner, responseTime, timestamp }) => {
   return (
-    <MessageContainer type={type}>
-      <MessageContent>
-        <MessageBubble type={type}>
-          {content}
-        </MessageBubble>
-        {type === 'assistant' && responseTime && (
-          <ResponseTime>
-            Temps de réponse : {responseTime}s
-          </ResponseTime>
-        )}
-      </MessageContent>
-      {showSpinner && (
-        <SpinnerContainer>
-          <ClipLoader color="#666" size={15} />
-        </SpinnerContainer>
+    <div className={`flex ${type === 'user' ? 'justify-end' : 'justify-start'} mb-3 items-end`}>
+      {type === 'assistant' && (
+        <div className="flex flex-col items-center mr-2">
+          <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
+            <Bot className="w-5 h-5 text-secondary" />
+          </div>
+          {timestamp && !showSpinner && (
+            <span className="text-xs text-muted-foreground">
+              {timestamp}
+            </span>
+          )}
+        </div>
       )}
-    </MessageContainer>
+      <div className="flex flex-col max-w-[70%]">
+        <div className={`
+          px-4 py-2 rounded-[0.5rem] text-white relative
+          ${type === 'user' 
+            ? 'bg-primary' 
+            : 'bg-secondary'}
+        `}>
+          {content}
+        </div>
+        {type === 'assistant' && responseTime && (
+          <span className="text-xs text-muted-foreground mt-1 ml-1">
+            Temps de réponse : {responseTime}s
+          </span>
+        )}
+      </div>
+      {type === 'user' && (
+        <div className="flex flex-col items-center ml-2">
+          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+            <User className="w-5 h-5 text-primary" />
+          </div>
+          {timestamp && (
+            <span className="text-xs text-muted-foreground">
+              {timestamp}
+            </span>
+          )}
+        </div>
+      )}
+      {showSpinner && (
+        <div className="h-[45px] w-[45px] flex justify-center items-center">
+          <ClipLoader color="var(--muted-foreground)" size={15} />
+        </div>
+      )}
+    </div>
   );
 };
 
