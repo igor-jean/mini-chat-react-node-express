@@ -2,6 +2,17 @@
 
 Une application de chat minimaliste utilisant React pour le frontend et Node.js/Express pour le backend, avec un modèle d'IA Mistral.
 
+## Fonctionnalités
+
+-   Interface de chat en temps réel
+-   Gestion de multiples conversations
+-   Titres automatiques basés sur la première question
+-   Suppression de conversations
+-   Historique des messages par conversation
+-   Temps de réponse affiché
+-   Réinitialisation des conversations
+-   Interface responsive
+
 ## Architecture
 
 ### Frontend (React)
@@ -9,13 +20,15 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 -   **Technologies principales** :
 
     -   React
-    -   styled-components (sera remplacé par shadcn/ui)
+    -   Tailwind CSS
+    -   Lucide Icons
     -   react-spinners
 
--   **Structure des composants** :
-    -   `ChatBox` : Affiche la conversation
-    -   `Message` : Gère l'affichage des messages
-    -   `MessageInput` : Gère la saisie des messages
+-   **Composants principaux** :
+    -   `App.js` : Composant principal et gestion des conversations
+    -   `ChatBox` : Affichage des messages
+    -   `Message` : Rendu des messages individuels
+    -   `MessageInput` : Saisie des messages
 
 ### Backend (Node.js/Express + Llama.cpp)
 
@@ -24,12 +37,46 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
     -   Express.js
     -   llama.cpp
     -   CORS
+    -   UUID
 
--   **Fonctionnalités** :
-    -   API REST pour le chat
+-   **Fonctionnalités API** :
+    -   Gestion des conversations
     -   Intégration avec le modèle Mistral 7B
-    -   Gestion des sessions de chat
+    -   Stockage en mémoire des conversations
     -   Optimisation GPU
+
+## API Backend
+
+### GET /conversations
+
+-   **Description** : Récupère la liste des conversations
+-   **Réponse** : Liste des conversations avec leurs IDs, titres et derniers messages
+
+### POST /conversations
+
+-   **Description** : Crée une nouvelle conversation
+-   **Réponse** : `{ id: "uuid" }`
+
+### GET /conversation/:id
+
+-   **Description** : Récupère les messages d'une conversation spécifique
+-   **Réponse** : Détails de la conversation et ses messages
+
+### POST /chat
+
+-   **Description** : Envoie un message au chatbot
+-   **Corps** : `{ "message": "votre message", "sessionId": "uuid" }`
+-   **Réponse** : `{ "response": "réponse du bot", "conversationId": "uuid" }`
+
+### DELETE /conversations/:id
+
+-   **Description** : Supprime une conversation
+-   **Réponse** : `{ "message": "Conversation supprimée avec succès" }`
+
+### POST /reset
+
+-   **Description** : Réinitialise la session de chat
+-   **Réponse** : `{ "message": "Session réinitialisée avec succès" }`
 
 ## Installation
 
@@ -40,27 +87,39 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 -   Le modèle Mistral 7B (fichier .gguf)
 -   llama.cpp (serveur)
 
-## Démarrage de l'application
+## Démarrage
 
-L'application nécessite le démarrage de trois composants dans l'ordre suivant :
-
-1. **Serveur Llama.cpp** (dans le dossier llama.cpp) :
+1. **Serveur Llama.cpp** :
 
 ```bash
 .\llama-server.exe --model ../models/mistral-7b-v0.1.Q4_K_M.gguf --ctx-size 2048 --n-gpu-layers 35 --port 8080
 ```
 
-2. **Serveur Backend** (dans le dossier backend) :
+2. **Serveur Backend** :
 
 ```bash
-node ./server.js
+cd backend
+npm install
+node server.js
 ```
 
-3. **Application Frontend** (dans le dossier frontend) :
+3. **Application Frontend** :
 
 ```bash
+cd frontend
+npm install
 npm start
 ```
+
+## Configuration du modèle d'IA
+
+Le modèle Mistral 7B est configuré avec les paramètres suivants :
+
+-   Taille du contexte : 2048 tokens
+-   Température : 0.3
+-   Top-K : 40
+-   Top-P : 0.90
+-   Utilisation GPU : 35 couches
 
 ## Structure des dossiers
 
@@ -69,6 +128,9 @@ npm start
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
+│   │   │   ├── ChatBox.jsx
+│   │   │   ├── Message.jsx
+│   │   │   └── MessageInput.jsx
 │   │   ├── styles/
 │   │   └── App.js
 │   └── package.json
@@ -80,26 +142,3 @@ npm start
 └── llama.cpp/
     └── llama-server.exe
 ```
-
-## API Backend
-
-### POST /chat
-
--   **Description** : Envoie un message au chatbot
--   **Corps de la requête** : `{ "message": "votre message" }`
--   **Réponse** : `{ "response": "réponse du bot" }`
-
-### POST /reset
-
--   **Description** : Réinitialise la session de chat
--   **Réponse** : `{ "message": "Session réinitialisée avec succès" }`
-
-## Configuration du modèle d'IA
-
-Le modèle Mistral 7B est configuré avec les paramètres suivants :
-
--   Taille du contexte : 2048 tokens
--   Température : 0.3
--   Top-K : 40
--   Top-P : 0.90
--   Utilisation GPU : 35 couches
