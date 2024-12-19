@@ -21,6 +21,10 @@ function App() {
     }
   }, [currentConversationId]);
 
+  
+  //  Récupère la liste des conversations depuis le serveur
+  //  et met à jour l'état 'conversations'
+   
   const fetchConversations = async () => {
     try {
       const response = await fetch('http://localhost:3001/conversations');
@@ -31,6 +35,7 @@ function App() {
     }
   };
 
+  //  Charge les messages d'une conversation spécifique
   const loadConversationMessages = async (conversationId) => {
     try {
       const response = await fetch(`http://localhost:3001/conversation/${conversationId}`);
@@ -50,6 +55,9 @@ function App() {
     }
   };
 
+
+  //  Crée une nouvelle conversation sur le serveur
+  //  et met à jour l'état avec la nouvelle conversation
   const createNewConversation = async () => {
     try {
       const response = await fetch('http://localhost:3001/conversations', {
@@ -64,6 +72,7 @@ function App() {
     }
   };
 
+//  Gère l'envoi d'un message à l'assistant
   const handleSendMessage = async (message) => {
     setIsLoading(true);
     const startTime = Date.now();
@@ -134,6 +143,7 @@ function App() {
     }
   };
 
+  //  Réinitialise la conversation en cours en effaçant tous les messages
   const handleReset = async () => {
     setIsResetting(true);
     try {
@@ -153,13 +163,13 @@ function App() {
     } catch (error) {
       console.error('Erreur lors de la réinitialisation:', error);
     } finally {
-      // Petit délai pour une meilleure expérience utilisateur
       setTimeout(() => {
         setIsResetting(false);
       }, 1000);
     }
   };
 
+  //  Supprime une conversation spécifique
   const deleteConversation = async (conversationId, event) => {
     event.stopPropagation();
     
@@ -222,7 +232,7 @@ function App() {
         </div>
 
         <div className="flex-1 border border-border rounded-2xl shadow-sm">
-          <div className="relative flex justify-center items-center mb-6">
+          <div className="relative flex justify-center items-center h-14 mb-2">
             <div className="flex items-center gap-2">
               <Bot className="w-8 h-8 text-black" />
               <h1 className="text-3xl font-bold text-foreground">Mini Chat</h1>
@@ -231,7 +241,7 @@ function App() {
             <button
               onClick={handleReset}
               disabled={isResetting}
-              className="absolute right-0 px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="absolute right-4 top-1/2 -translate-y-1/2 px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <RefreshCw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} />
             </button>

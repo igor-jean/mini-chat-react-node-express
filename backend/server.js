@@ -1,17 +1,18 @@
-// Import des modules nécessaires
-import express from 'express';  // Framework web pour Node.js
-import cors from 'cors';        // Permet les requêtes cross-origin
-import fetch from 'node-fetch';  // Ajoutez cette ligne
+import express from 'express';
+import cors from 'cors';
+import fetch from 'node-fetch';
 import { v4 as uuidv4 } from 'uuid';
 
-// Création de l'application Express
+// Configuration de base du serveur Express
+// --------------------------------------
+// Initialisation d'Express et des middlewares
 const app = express();
-
-// Middleware pour permettre le CORS et parser le JSON
 app.use(cors());
 app.use(express.json());
 
-// Stockage des conversations par sessionId
+// Gestion des données
+// -----------------
+// Stockage en mémoire des conversations avec Map()
 const conversations = new Map();
 
 // Route POST pour le chat
@@ -80,14 +81,14 @@ app.post('/chat', async (req, res) => {
             },
             body: JSON.stringify({
                 prompt: fullPrompt,
-                temperature: 0.3,        // Légèrement plus créatif pour des réponses naturelles
-                top_p: 0.90,            // Contrôle de la diversité des réponses
-                top_k: 40,              // Valeur standard pour un bon équilibre
-                n_predict: 2048,        // Réponses assez longues
-                repeat_penalty: 1.15,    // Évite les répétitions sans être trop strict
-                presence_penalty: 0.2,   // Encourage légèrement la diversité
-                frequency_penalty: 0.2,  // Évite la répétition excessive de mots
-                stop: ["###", "<input>", "<system>", "</output>"]
+                temperature: 0.3,        // Contrôle la créativité/aléatoire des réponses
+                top_p: 0.90,            // Filtre les tokens en ne gardant que ceux dont la probabilité cumulée est < top_p
+                top_k: 40,              // Limite le nombre de tokens les plus probables à considérer
+                n_predict: 2048,        // Nombre maximum de tokens à générer dans la réponse
+                repeat_penalty: 1.15,    // Pénalise la répétition des mêmes séquences de tokens
+                presence_penalty: 0.2,   // Pénalise l'utilisation de tokens déjà présents dans le contexte
+                frequency_penalty: 0.2,  // Pénalise les tokens fréquemment utilisés
+                stop: ["###", "<input>", "<system>", "</output>"] // Séquences qui arrêtent la génération
             })
         });
 

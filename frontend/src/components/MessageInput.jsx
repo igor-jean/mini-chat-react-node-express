@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { Send } from 'lucide-react';
 
 const MessageInput = ({ onSend, disabled }) => {
   const [message, setMessage] = useState('');
@@ -20,7 +21,7 @@ const MessageInput = ({ onSend, disabled }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-3">
+    <form onSubmit={handleSubmit} className="flex gap-3 mb-5 mx-2">
       <input
         ref={inputRef}
         type="text"
@@ -33,8 +34,9 @@ const MessageInput = ({ onSend, disabled }) => {
       <button
         type="submit"
         disabled={disabled || !message.trim()}
-        className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-6 py-3 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
       >
+        <Send size={18} />
         Envoyer
       </button>
     </form>

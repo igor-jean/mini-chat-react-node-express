@@ -84,14 +84,27 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 
 -   Node.js v16+
 -   npm ou yarn
+-   CUDA Toolkit (pour l'accélération GPU)
 -   Le modèle Mistral 7B (fichier .gguf)
 -   llama.cpp (serveur)
 
-## Démarrage
+### Configuration
+
+1. **Téléchargement du modèle** :
+
+    - Téléchargez le modèle Mistral 7B quantifié (mistral-7b-v0.1.Q4_K_M.gguf) depuis Hugging Face
+    - Placez-le dans le dossier `models/`
+
+2. **Installation de llama.cpp** :
+    - Téléchargez la version pré-compilée pour CUDA depuis les releases GitHub
+    - Extrayez llama-server.exe dans le dossier `llama.cpp/`
+
+### Démarrage
 
 1. **Serveur Llama.cpp** :
 
 ```bash
+cd llama.cpp
 .\llama-server.exe --model ../models/mistral-7b-v0.1.Q4_K_M.gguf --ctx-size 2048 --n-gpu-layers 35 --port 8080
 ```
 
@@ -115,11 +128,13 @@ npm start
 
 Le modèle Mistral 7B est configuré avec les paramètres suivants :
 
--   Taille du contexte : 2048 tokens
--   Température : 0.3
--   Top-K : 40
--   Top-P : 0.90
--   Utilisation GPU : 35 couches
+-   temperature: 0.3,
+-   top_p: 0.90,
+-   top_k: 40,
+-   n_predict: 2048,
+-   repeat_penalty: 1.15,
+-   presence_penalty: 0.2,
+-   frequency_penalty: 0.2,
 
 ## Structure des dossiers
 
