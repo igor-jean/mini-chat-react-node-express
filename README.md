@@ -11,7 +11,6 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 -   Historique des messages par conversation
 -   Temps de réponse affiché
 -   Réinitialisation des conversations
--   Interface responsive
 
 ## Architecture
 
@@ -36,8 +35,6 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 
     -   Express.js
     -   llama.cpp
-    -   CORS
-    -   UUID
 
 -   **Fonctionnalités API** :
     -   Gestion des conversations
