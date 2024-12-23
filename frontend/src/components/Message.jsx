@@ -1,6 +1,7 @@
 import React from 'react';
 import ClipLoader from 'react-spinners/ClipLoader';
 import { Bot, User } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 // Composant Message qui affiche un message individuel avec son style et ses métadonnées
 // props:
@@ -34,7 +35,20 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp }) => {
             ? 'bg-primary' 
             : 'bg-secondary'}
         `}>
-          {content}
+          {type === 'assistant' ? (
+            <ReactMarkdown className="prose prose-invert max-w-none
+              prose-headings:text-blue-300
+              prose-p:text-gray-100
+              prose-strong:text-yellow-300
+              prose-em:text-green-300
+              prose-code:text-pink-300
+              prose-ul:text-gray-100
+              prose-li:text-gray-100">
+              {content}
+            </ReactMarkdown>
+          ) : (
+            content
+          )}
         </div>
 
         {/* Temps de réponse pour les messages de l'assistant */}
