@@ -7,3 +7,7 @@ models/
 
 # Ignorer tout le dossier llama.cpp et son contenu
 llama.cpp/
+
+# Ignorer le fichier chat.db
+chat.db
+

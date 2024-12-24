@@ -2,6 +2,37 @@ import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
 import { v4 as uuidv4 } from 'uuid';
+import Database from 'better-sqlite3';
+
+// Initialisation de la base de données
+const db = new Database('chat.db');
+
+// Création des tables
+db.exec(`
+    CREATE TABLE IF NOT EXISTS conversations (
+        id TEXT PRIMARY KEY,
+        title TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+    
+    CREATE TABLE IF NOT EXISTS messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        conversation_id TEXT,
+        role TEXT,
+        content TEXT,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+    );
+`);
+
+// Préparation des requêtes
+const insertConversation = db.prepare('INSERT INTO conversations (id, title, timestamp) VALUES (?, ?, ?)');
+const insertMessage = db.prepare('INSERT INTO messages (conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?)');
+const getConversation = db.prepare('SELECT * FROM conversations WHERE id = ?');
+const getMessages = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp');
+const updateConversationTimestamp = db.prepare('UPDATE conversations SET timestamp = ? WHERE id = ?');
+const deleteConversation = db.prepare('DELETE FROM conversations WHERE id = ?');
+const deleteMessages = db.prepare('DELETE FROM messages WHERE conversation_id = ?');
 
 // Configuration de base du serveur Express
 // --------------------------------------
@@ -19,33 +50,31 @@ const conversations = new Map();
 app.post('/chat', async (req, res) => {
     try {
         const { message, sessionId } = req.body;
-        
-        // Générer un nouveau sessionId si aucun n'est fourni
         const currentSessionId = sessionId || uuidv4();
-        
-        // Récupérer ou créer l'historique de la conversation
-        if (!conversations.has(currentSessionId)) {
-            conversations.set(currentSessionId, {
-                title: '', // Laisser le titre vide initialement
-                messages: [],
-                timestamp: new Date()
-            });
+        const now = new Date().toISOString();
+
+        // Vérifier si la conversation existe
+        let conversation = getConversation.get(currentSessionId);
+        if (!conversation) {
+            // Créer nouvelle conversation
+            insertConversation.run(currentSessionId, '', now);
+            conversation = { id: currentSessionId, title: '' };
         }
-        const conversation = conversations.get(currentSessionId);
-        
-        // Si c'est le premier message et que le titre est vide, définir le titre
-        if (conversation.messages.length === 0 && !conversation.title) {
-            conversation.title = message.length > 25 
-                ? message.substring(0, 25) + '...'
-                : message;
+
+        // Récupérer les messages existants
+        const messages = getMessages.all(currentSessionId);
+
+        // Définir le titre si c'est le premier message
+        if (messages.length === 0 && !conversation.title) {
+            const title = message.length > 25 ? message.substring(0, 25) + '...' : message;
+            db.prepare('UPDATE conversations SET title = ? WHERE id = ?').run(title, currentSessionId);
         }
-        
-        // Ajouter le nouveau message à l'historique
-        conversation.messages.push({ role: 'user', content: message });
-        conversation.timestamp = new Date();
-        
+
+        // Ajouter le message de l'utilisateur
+        insertMessage.run(currentSessionId, 'user', message, now);
+
         // Construire le contexte complet avec l'historique
-        const conversationContext = conversation.messages
+        const conversationContext = messages
             .map(msg => `<${msg.role}>${msg.content}</${msg.role}>`)
             .join('\n');
         
@@ -66,7 +95,7 @@ app.post('/chat', async (req, res) => {
             Ne prétendez jamais être humain. Vous êtes une IA honnête et fiable.
         <|eot_id|>
 
-        ${conversation.messages.map(msg => 
+        ${messages.map(msg => 
             `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`
         ).join('\n')}
 
@@ -101,13 +130,11 @@ app.post('/chat', async (req, res) => {
             .trim();
         
         // Ajouter la réponse à l'historique
-        conversation.messages.push({ role: 'assistant', content: cleanResponse });
+        insertMessage.run(currentSessionId, 'assistant', cleanResponse, now);
         
-        // Limiter la taille de l'historique
-        if (conversation.messages.length > 10) {
-            conversation.messages.splice(0, conversation.messages.length - 10);
-        }
-        
+        // Mettre à jour le timestamp de la conversation
+        updateConversationTimestamp.run(now, currentSessionId);
+
         res.json({ 
             response: cleanResponse,
             conversationId: currentSessionId
@@ -150,15 +177,22 @@ app.post('/conversations', (req, res) => {
 // Après les routes existantes, ajoutez la route GET pour les conversations
 app.get('/conversations', (req, res) => {
     try {
-        const conversationsList = Array.from(conversations.entries()).map(([id, data]) => ({
-            id,
-            title: data.title,
-            lastMessage: data.messages[data.messages.length - 1]?.content || '',
-            timestamp: data.timestamp
-        }));
-        res.json(conversationsList);
+        const conversations = db.prepare(`
+            SELECT c.*, m.content as lastMessage 
+            FROM conversations c 
+            LEFT JOIN messages m ON m.conversation_id = c.id 
+            WHERE m.id = (
+                SELECT id FROM messages 
+                WHERE conversation_id = c.id 
+                ORDER BY timestamp DESC 
+                LIMIT 1
+            )
+            ORDER BY c.timestamp DESC
+        `).all();
+        
+        res.json(conversations);
     } catch (error) {
-        console.error('Erreur lors de la récupération des conversations:', error);
+        console.error('Erreur:', error);
         res.status(500).json({ 
             error: 'Erreur lors de la récupération des conversations',
             details: error.message 
@@ -196,17 +230,18 @@ app.get('/conversation/:id', (req, res) => {
 });
 
 // Modifier la route de suppression
-app.delete('/conversations/:id', (req, res) => {  // Changement de 'conversation' à 'conversations'
+app.delete('/conversations/:id', (req, res) => {
     try {
         const conversationId = req.params.id;
-        if (conversations.has(conversationId)) {
-            conversations.delete(conversationId);
-            res.json({ message: 'Conversation supprimée avec succès' });
-        } else {
-            res.status(404).json({ error: 'Conversation non trouvée' });
-        }
+        
+        // Supprimer les messages d'abord (à cause de la clé étrangère)
+        deleteMessages.run(conversationId);
+        // Puis supprimer la conversation
+        deleteConversation.run(conversationId);
+        
+        res.json({ message: 'Conversation supprimée avec succès' });
     } catch (error) {
-        console.error('Erreur lors de la suppression:', error);
+        console.error('Erreur:', error);
         res.status(500).json({ 
             error: 'Erreur lors de la suppression',
             details: error.message 

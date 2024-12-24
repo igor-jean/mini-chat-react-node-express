@@ -1,6 +1,6 @@
 # Mini Chat React Node Express
 
-Une application de chat minimaliste utilisant React pour le frontend et Node.js/Express pour le backend, avec un modèle d'IA Mistral.
+Une application de chat minimaliste utilisant React pour le frontend et Node.js/Express pour le backend, avec un modèle d'IA Llama 3.2 1B.
 
 ## Fonctionnalités
 
@@ -82,14 +82,14 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 -   Node.js v16+
 -   npm ou yarn
 -   CUDA Toolkit (pour l'accélération GPU)
--   Le modèle Mistral 7B (fichier .gguf)
+-   Le modèle Llama 3.2 1B (fichier .gguf)
 -   llama.cpp (serveur)
 
 ### Configuration
 
 1. **Téléchargement du modèle** :
 
-    - Téléchargez le modèle Mistral 7B quantifié (mistral-7b-v0.1.Q4_K_M.gguf) depuis Hugging Face
+    - Téléchargez le modèle Llama 3.2 1B quantifié (llama-3.2-1b-instruct-q8_0.gguf) depuis Hugging Face
     - Placez-le dans le dossier `models/`
 
 2. **Installation de llama.cpp** :
@@ -102,7 +102,7 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 
 ```bash
 cd llama.cpp
-.\llama-server.exe --model ../models/Llama-3.2-1B-Instruct.fp16.gguf --ctx-size 2048 --n-gpu-layers 35 --port 8080
+.\llama-server.exe --model ../models/llama-3.2-1b-instruct-q8_0.gguf --ctx-size 2048 --n-gpu-layers 35 --port 8080
 ```
 
 2. **Serveur Backend** :
