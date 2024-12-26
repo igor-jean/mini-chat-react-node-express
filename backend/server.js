@@ -33,6 +33,18 @@ const getMessages = db.prepare('SELECT * FROM messages WHERE conversation_id = ?
 const updateConversationTimestamp = db.prepare('UPDATE conversations SET timestamp = ? WHERE id = ?');
 const deleteConversation = db.prepare('DELETE FROM conversations WHERE id = ?');
 const deleteMessages = db.prepare('DELETE FROM messages WHERE conversation_id = ?');
+const getConversations = db.prepare(`
+    SELECT c.*, m.content as lastMessage 
+    FROM conversations c 
+    LEFT JOIN messages m ON m.conversation_id = c.id 
+    WHERE m.id = (
+        SELECT id FROM messages 
+        WHERE conversation_id = c.id 
+        ORDER BY timestamp DESC 
+        LIMIT 1
+    )
+    ORDER BY c.timestamp DESC
+`);
 
 // Configuration de base du serveur Express
 // --------------------------------------
@@ -44,7 +56,6 @@ app.use(express.json());
 // Gestion des données
 // -----------------
 // Stockage en mémoire des conversations avec Map()
-const conversations = new Map();
 
 // Route POST pour le chat
 app.post('/chat', async (req, res) => {
@@ -75,7 +86,7 @@ app.post('/chat', async (req, res) => {
 
         // Construire le contexte complet avec l'historique
         const conversationContext = messages
-            .map(msg => `<${msg.role}>${msg.content}</${msg.role}>`)
+            .map(msg => `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`)
             .join('\n');
         
         // Modification du format du prompt pour suivre la documentation Llama
@@ -95,9 +106,7 @@ app.post('/chat', async (req, res) => {
             Ne prétendez jamais être humain. Vous êtes une IA honnête et fiable.
         <|eot_id|>
 
-        ${messages.map(msg => 
-            `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`
-        ).join('\n')}
+        ${conversationContext}
 
         <|start_header_id|>user<|end_header_id|>${message}<|eot_id|>
         <|start_header_id|>assistant<|end_header_id|>`;
@@ -149,10 +158,27 @@ app.post('/chat', async (req, res) => {
 });
 
 // Route pour réinitialiser une conversation
-app.post('/reset', async (req, res) => {
+app.post('/reset/:id', async (req, res) => {
     try {
-        const { sessionId = 'default' } = req.body;
-        conversations.delete(sessionId);
+        const conversationId = req.params.id;
+        
+        if (!conversationId) {
+            return res.status(400).json({ 
+                error: 'ID de conversation requis' 
+            });
+        }
+
+        // Vérifier si la conversation existe
+        const conversation = getConversation.get(conversationId);
+        if (!conversation) {
+            return res.status(404).json({ 
+                error: 'Conversation non trouvée' 
+            });
+        }
+
+        // Supprimer les messages d'abord (à cause de la clé étrangère)
+        deleteMessages.run(conversationId);
+
         res.json({ message: 'Session réinitialisée avec succès' });
     } catch (error) {
         console.error('Erreur lors de la réinitialisation:', error);
@@ -165,31 +191,24 @@ app.post('/reset', async (req, res) => {
 
 // Modifier la route pour créer une nouvelle conversation
 app.post('/conversations', (req, res) => {
-    const id = uuidv4();
-    conversations.set(id, {
-        title: '', // Laisser le titre vide initialement
-        messages: [],
-        timestamp: new Date()
-    });
-    res.json({ id });
+    try {
+        const id = uuidv4();
+        const now = new Date().toISOString();
+        insertConversation.run(id, '', now);
+        res.json({ id });
+    } catch (error) {
+        console.error('Erreur:', error);
+        res.status(500).json({ 
+            error: 'Erreur lors de la création de la conversation',
+            details: error.message 
+        });
+    }
 });
 
 // Après les routes existantes, ajoutez la route GET pour les conversations
 app.get('/conversations', (req, res) => {
     try {
-        const conversations = db.prepare(`
-            SELECT c.*, m.content as lastMessage 
-            FROM conversations c 
-            LEFT JOIN messages m ON m.conversation_id = c.id 
-            WHERE m.id = (
-                SELECT id FROM messages 
-                WHERE conversation_id = c.id 
-                ORDER BY timestamp DESC 
-                LIMIT 1
-            )
-            ORDER BY c.timestamp DESC
-        `).all();
-        
+        const conversations = getConversations.all();
         res.json(conversations);
     } catch (error) {
         console.error('Erreur:', error);
@@ -204,7 +223,9 @@ app.get('/conversations', (req, res) => {
 app.get('/conversation/:id', (req, res) => {
     try {
         const conversationId = req.params.id;
-        const conversation = conversations.get(conversationId);
+        
+        // Récupérer la conversation depuis la base de données
+        const conversation = getConversation.get(conversationId);
         
         if (!conversation) {
             return res.status(404).json({ 
@@ -212,12 +233,16 @@ app.get('/conversation/:id', (req, res) => {
             });
         }
 
+        // Récupérer les messages de la conversation
+        const messages = getMessages.all(conversationId);
+
         res.json({
             id: conversationId,
             title: conversation.title,
-            messages: conversation.messages.map(msg => ({
-                ...msg,
-                timestamp: conversation.timestamp
+            messages: messages.map(msg => ({
+                role: msg.role,
+                content: msg.content,
+                timestamp: msg.timestamp
             }))
         });
     } catch (error) {

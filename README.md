@@ -102,7 +102,7 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 
 ```bash
 cd llama.cpp
-.\llama-server.exe --model ../models/llama-3.2-1b-instruct-q8_0.gguf --ctx-size 2048 --n-gpu-layers 35 --port 8080
+.\llama-server.exe --model ../models/llama-3.2-1b-instruct-q8_0.gguf --ctx-size 16384 --n-gpu-layers 35 --port 8080
 ```
 
 2. **Serveur Backend** :
@@ -123,7 +123,7 @@ npm start
 
 ## Configuration du modèle d'IA
 
-Le modèle Mistral 7B est configuré avec les paramètres suivants :
+Le modèle Llama 3.2 1B est configuré avec les paramètres suivants :
 
 -   temperature: 0.3,
 -   top_p: 0.90,
@@ -150,7 +150,7 @@ Le modèle Mistral 7B est configuré avec les paramètres suivants :
 │   ├── server.js
 │   └── package.json
 ├── models/
-│   └── mistral-7b-v0.1.Q4_K_M.gguf
+│   └── llama-3.2-1b-instruct-q8_0.gguf
 └── llama.cpp/
     └── llama-server.exe
 ```

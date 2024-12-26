@@ -3,6 +3,15 @@ import ChatBox from './components/ChatBox';
 import MessageInput from './components/MessageInput';
 import './styles/globals.css';
 import { RefreshCw, Bot, PlusCircle, X } from 'lucide-react';
+import axios from 'axios';
+
+// Configuration de base d'axios
+const api = axios.create({
+  baseURL: 'http://localhost:3001',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -27,8 +36,7 @@ function App() {
    
   const fetchConversations = async () => {
     try {
-      const response = await fetch('http://localhost:3001/conversations');
-      const data = await response.json();
+      const { data } = await api.get('/conversations');
       setConversations(data);
     } catch (error) {
       console.error('Erreur lors du chargement des conversations:', error);
@@ -38,8 +46,7 @@ function App() {
   //  Charge les messages d'une conversation spécifique
   const loadConversationMessages = async (conversationId) => {
     try {
-      const response = await fetch(`http://localhost:3001/conversation/${conversationId}`);
-      const data = await response.json();
+      const { data } = await api.get(`/conversation/${conversationId}`);
       if (data.messages) {
         setMessages(data.messages.map(msg => ({
           type: msg.role,
@@ -60,10 +67,7 @@ function App() {
   //  et met à jour l'état avec la nouvelle conversation
   const createNewConversation = async () => {
     try {
-      const response = await fetch('http://localhost:3001/conversations', {
-        method: 'POST'
-      });
-      const data = await response.json();
+      const { data } = await api.post('/conversations');
       setCurrentConversationId(data.id);
       setMessages([]);
       await fetchConversations();
@@ -87,18 +91,10 @@ function App() {
     ]);
 
     try {
-      const response = await fetch('http://localhost:3001/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          message,
-          sessionId: currentConversationId 
-        }),
+      const { data } = await api.post('/chat', {
+        message,
+        sessionId: currentConversationId
       });
-      
-      const data = await response.json();
       
       if (!currentConversationId) {
         setCurrentConversationId(data.conversationId);
@@ -147,19 +143,8 @@ function App() {
   const handleReset = async () => {
     setIsResetting(true);
     try {
-      const response = await fetch('http://localhost:3001/reset', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      });
-      
-      if (response.ok) {
-        setMessages([]);
-      } else {
-        console.error('Erreur lors de la réinitialisation');
-      }
-      
+      await api.post(`/reset/${currentConversationId}`);
+      setMessages([]);
     } catch (error) {
       console.error('Erreur lors de la réinitialisation:', error);
     } finally {
@@ -174,21 +159,14 @@ function App() {
     event.stopPropagation();
     
     try {
-        const response = await fetch(`http://localhost:3001/conversations/${conversationId}`, {
-            method: 'DELETE'
-        });
-        
-        if (response.ok) {
-            if (currentConversationId === conversationId) {
-                setCurrentConversationId(null);
-                setMessages([]);
-            }
-            await fetchConversations();
-        } else {
-            console.error('Erreur lors de la suppression:', await response.json());
-        }
+      await api.delete(`/conversations/${conversationId}`);
+      if (currentConversationId === conversationId) {
+        setCurrentConversationId(null);
+        setMessages([]);
+      }
+      await fetchConversations();
     } catch (error) {
-        console.error('Erreur lors de la suppression:', error);
+      console.error('Erreur lors de la suppression:', error);
     }
   };
 
