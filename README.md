@@ -102,7 +102,7 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 
 ```bash
 cd llama.cpp
-.\llama-server.exe --model ../models/llama-3.2-1b-instruct-q8_0.gguf --ctx-size 16384 --n-gpu-layers 35 --port 8080
+.\llama-server.exe --model ../models/llama-3.2-1b-instruct-q8_0.gguf --ctx-size 8076 --n-gpu-layers 35 --port 8080
 ```
 
 2. **Serveur Backend** :
