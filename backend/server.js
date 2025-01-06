@@ -20,8 +20,18 @@ db.exec(`
         conversation_id TEXT,
         role TEXT,
         content TEXT,
+        current_version INTEGER DEFAULT 1,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS message_versions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message_id INTEGER,
+        content TEXT,
+        version_number INTEGER,
+        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (message_id) REFERENCES messages(id)
     );
 `);
 
