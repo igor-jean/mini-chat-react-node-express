@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ClipLoader from 'react-spinners/ClipLoader';
-import { Bot, User } from 'lucide-react';
+import { Bot, User, Edit, Check, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 
 // Composant Message qui affiche un message individuel avec son style et ses métadonnées
@@ -11,6 +11,8 @@ import ReactMarkdown from 'react-markdown';
 //   - responseTime: temps de réponse pour les messages de l'assistant
 //   - timestamp: horodatage du message
 const Message = ({ type, content, showSpinner, responseTime, timestamp }) => {
+  const [isEditing, setIsEditing] = useState(false)
+
   return (
     // Container principal avec alignement conditionnel selon le type de message
     <div className={`flex ${type === 'user' ? 'justify-end' : 'justify-start'} mb-3 items-end`}>
@@ -28,13 +30,39 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp }) => {
       )}
 
       <div className="flex flex-col max-w-[70%]">
-        {/* Bulle du message avec couleur conditionnelle */}
         <div className={`
-          px-4 py-2 rounded-[0.5rem] text-white relative
+          px-4 py-3 rounded-[0.5rem] text-white relative group
           ${type === 'user' 
             ? 'bg-primary' 
             : 'bg-secondary'}
         `}>
+          {type === 'user' && (
+            <div className="absolute right-1 bottom-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              {isEditing ? (
+                <div className="flex gap-1">
+                  <Check 
+                    className="w-4 h-4 text-white/80 hover:text-white cursor-pointer" 
+                    onClick={() => {
+                      setIsEditing(false)
+                      // Ajouter ici la logique pour sauvegarder les modifications
+                    }} 
+                  />
+                  <X 
+                    className="w-4 h-4 text-white/80 hover:text-white cursor-pointer" 
+                    onClick={() => {
+                      setIsEditing(false)
+                      // Ajouter ici la logique pour annuler les modifications
+                    }} 
+                  />
+                </div>
+              ) : (
+                <Edit 
+                  className="w-4 h-4 text-white/80 hover:text-white" 
+                  onClick={() => setIsEditing(true)} 
+                />
+              )}
+            </div>
+          )}
           {type === 'assistant' ? (
             <ReactMarkdown className="prose prose-invert max-w-none
               prose-headings:text-blue-300
@@ -47,7 +75,28 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp }) => {
               {content}
             </ReactMarkdown>
           ) : (
-            content
+            isEditing ? (
+              <textarea 
+                className='w-full bg-transparent outline-none text-white resize-none min-h-[24px] overflow-y-hidden'
+                defaultValue={content}
+                autoFocus
+                onBlur={() => setIsEditing(false)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    setIsEditing(false)
+                    // Ici vous pourrez ajouter la logique pour sauvegarder le nouveau contenu
+                  }
+                }}
+                onChange={(e) => {
+                  // Ajuste automatiquement la hauteur
+                  e.target.style.height = 'auto';
+                  e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+              />
+            ) : (
+              content
+            )
           )}
         </div>
 
