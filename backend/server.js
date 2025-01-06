@@ -37,9 +37,20 @@ db.exec(`
 
 // Préparation des requêtes
 const insertConversation = db.prepare('INSERT INTO conversations (id, title, timestamp) VALUES (?, ?, ?)');
-const insertMessage = db.prepare('INSERT INTO messages (conversation_id, role, content, timestamp) VALUES (?, ?, ?, ?)');
+const insertMessage = db.prepare(`
+    INSERT INTO messages (conversation_id, role, content, timestamp) 
+    VALUES (?, ?, ?, ?) 
+    RETURNING id
+`);
 const getConversation = db.prepare('SELECT * FROM conversations WHERE id = ?');
-const getMessages = db.prepare('SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp');
+const getMessages = db.prepare(`
+    SELECT m.*, mv.content as version_content 
+    FROM messages m 
+    JOIN message_versions mv ON m.id = mv.message_id 
+    WHERE m.conversation_id = ? 
+    AND mv.version_number = m.current_version 
+    ORDER BY m.timestamp
+`);
 const updateConversationTimestamp = db.prepare('UPDATE conversations SET timestamp = ? WHERE id = ?');
 const deleteConversation = db.prepare('DELETE FROM conversations WHERE id = ?');
 const deleteMessages = db.prepare('DELETE FROM messages WHERE conversation_id = ?');
@@ -54,6 +65,30 @@ const getConversations = db.prepare(`
         LIMIT 1
     )
     ORDER BY c.timestamp DESC
+`);
+
+// Nouvelles requêtes préparées
+const insertMessageVersion = db.prepare(`
+    INSERT INTO message_versions (message_id, content, version_number) 
+    VALUES (?, ?, ?)
+`);
+
+const getMessageVersions = db.prepare(`
+    SELECT * FROM message_versions 
+    WHERE message_id = ? 
+    ORDER BY version_number
+`);
+
+const updateMessageCurrentVersion = db.prepare(`
+    UPDATE messages 
+    SET current_version = ? 
+    WHERE id = ?
+`);
+
+const getLatestVersionNumber = db.prepare(`
+    SELECT MAX(version_number) as latest_version 
+    FROM message_versions 
+    WHERE message_id = ?
 `);
 
 // Configuration de base du serveur Express
@@ -92,7 +127,7 @@ app.post('/chat', async (req, res) => {
         }
 
         // Ajouter le message de l'utilisateur
-        insertMessage.run(currentSessionId, 'user', message, now);
+        insertNewMessage(currentSessionId, 'user', message, now);
 
         // Construire le contexte complet avec l'historique
         const conversationContext = messages
@@ -166,7 +201,7 @@ app.post('/chat', async (req, res) => {
             .trim();
         
         // Ajouter la réponse à l'historique
-        insertMessage.run(currentSessionId, 'assistant', cleanResponse, now);
+        insertNewMessage(currentSessionId, 'assistant', cleanResponse, now);
         
         // Mettre à jour le timestamp de la conversation
         updateConversationTimestamp.run(now, currentSessionId);
@@ -296,6 +331,97 @@ app.delete('/conversations/:id', (req, res) => {
         console.error('Erreur:', error);
         res.status(500).json({ 
             error: 'Erreur lors de la suppression',
+            details: error.message 
+        });
+    }
+});
+
+// Modification de la fonction d'insertion de message
+function insertNewMessage(conversationId, role, content, timestamp) {
+    const db = new Database('chat.db');
+    try {
+        return db.transaction(() => {
+            // Insérer le message et récupérer son ID
+            const { id: messageId } = insertMessage.run(conversationId, role, content, timestamp);
+            
+            // Créer la première version
+            insertMessageVersion.run(messageId, content, 1);
+            
+            return messageId;
+        })();
+    } finally {
+        db.close();
+    }
+}
+
+// Nouvelle route pour modifier un message
+app.put('/messages/:messageId', (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const { content } = req.body;
+        const now = new Date().toISOString();
+
+        // Récupérer la dernière version
+        const { latest_version } = getLatestVersionNumber.get(messageId);
+        const newVersionNumber = (latest_version || 0) + 1;
+
+        // Insérer la nouvelle version
+        insertMessageVersion.run(messageId, content, newVersionNumber);
+        
+        // Mettre à jour la version courante
+        updateMessageCurrentVersion.run(newVersionNumber, messageId);
+
+        res.json({ 
+            messageId, 
+            versionNumber: newVersionNumber,
+            timestamp: now 
+        });
+    } catch (error) {
+        console.error('Erreur lors de la modification du message:', error);
+        res.status(500).json({ 
+            error: 'Erreur lors de la modification',
+            details: error.message 
+        });
+    }
+});
+
+// Route pour récupérer les versions d'un message
+app.get('/messages/:messageId/versions', (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const versions = getMessageVersions.all(messageId);
+        
+        res.json(versions);
+    } catch (error) {
+        console.error('Erreur lors de la récupération des versions:', error);
+        res.status(500).json({ 
+            error: 'Erreur lors de la récupération des versions',
+            details: error.message 
+        });
+    }
+});
+
+// Route pour récupérer une version spécifique
+app.get('/messages/:messageId/versions/:versionNumber', (req, res) => {
+    try {
+        const { messageId, versionNumber } = req.params;
+        
+        const version = db.prepare(`
+            SELECT * FROM message_versions 
+            WHERE message_id = ? AND version_number = ?
+        `).get(messageId, versionNumber);
+
+        if (!version) {
+            return res.status(404).json({ 
+                error: 'Version non trouvée' 
+            });
+        }
+
+        res.json(version);
+    } catch (error) {
+        console.error('Erreur lors de la récupération de la version:', error);
+        res.status(500).json({ 
+            error: 'Erreur lors de la récupération de la version',
             details: error.message 
         });
     }
