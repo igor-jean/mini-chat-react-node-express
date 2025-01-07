@@ -1,7 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ClipLoader from 'react-spinners/ClipLoader';
-import { Bot, User, Edit, Check, X } from 'lucide-react';
+import { Bot, User, Edit, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import axios from 'axios';
+
+const api = axios.create({
+  baseURL: 'http://localhost:3001',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
 
 // Composant Message qui affiche un message individuel avec son style et ses métadonnées
 // props:
@@ -10,8 +18,62 @@ import ReactMarkdown from 'react-markdown';
 //   - showSpinner: booléen pour afficher un spinner de chargement
 //   - responseTime: temps de réponse pour les messages de l'assistant
 //   - timestamp: horodatage du message
-const Message = ({ type, content, showSpinner, responseTime, timestamp }) => {
-  const [isEditing, setIsEditing] = useState(false)
+//   - conversationId: ID de la conversation
+//   - ordre: ordre du message dans la conversation
+//   - messageId: ID du message
+const Message = ({ type, content, showSpinner, responseTime, timestamp, conversationId, ordre, messageId }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedContent, setEditedContent] = useState(content);
+  const [versions, setVersions] = useState(null);
+  const [currentVersionIndex, setCurrentVersionIndex] = useState(0);
+
+  // Fonction pour charger les versions du message
+  const fetchVersions = async () => {
+    try {
+      const response = await api.get(`/messages/${messageId}/versions`);
+      if (response.data.hasMultipleVersions) {
+        setVersions(response.data.versions);
+        // Trouver l'index de la version actuelle
+        const currentIndex = response.data.versions.findIndex(v => v.content === content);
+        setCurrentVersionIndex(currentIndex !== -1 ? currentIndex : 0);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la récupération des versions:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (messageId) {
+      fetchVersions();
+    }
+  }, [messageId]);
+
+  // Navigation entre les versions
+  const navigateVersion = (direction) => {
+    const newIndex = direction === 'next' 
+      ? (currentVersionIndex + 1) % versions.length 
+      : (currentVersionIndex - 1 + versions.length) % versions.length;
+    setCurrentVersionIndex(newIndex);
+    setEditedContent(versions[newIndex].content);
+  };
+
+  const handleSaveEdit = async () => {
+    try {
+      if (editedContent !== content) {
+        await api.post('/messages/version', {
+          conversation_id: conversationId,
+          ordre: ordre,
+          content: editedContent
+        });
+        // Vous pouvez ajouter ici un callback pour mettre à jour la liste des messages
+        // onMessageUpdate(editedContent);
+      }
+      setIsEditing(false);
+    } catch (error) {
+      console.error('Erreur lors de la modification du message:', error);
+      // Optionnel : ajouter une notification d'erreur
+    }
+  };
 
   return (
     // Container principal avec alignement conditionnel selon le type de message
@@ -42,16 +104,13 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp }) => {
                 <div className="flex gap-1">
                   <Check 
                     className="w-4 h-4 text-white/80 hover:text-white cursor-pointer" 
-                    onClick={() => {
-                      setIsEditing(false)
-                      // Ajouter ici la logique pour sauvegarder les modifications
-                    }} 
+                    onClick={handleSaveEdit} 
                   />
                   <X 
                     className="w-4 h-4 text-white/80 hover:text-white cursor-pointer" 
                     onClick={() => {
-                      setIsEditing(false)
-                      // Ajouter ici la logique pour annuler les modifications
+                      setIsEditing(false);
+                      setEditedContent(content); // Réinitialiser le contenu édité
                     }} 
                   />
                 </div>
@@ -78,20 +137,19 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp }) => {
             isEditing ? (
               <textarea 
                 className='w-full bg-transparent outline-none text-white resize-none min-h-[24px] overflow-y-hidden'
-                defaultValue={content}
-                autoFocus
-                onBlur={() => setIsEditing(false)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    setIsEditing(false)
-                    // Ici vous pourrez ajouter la logique pour sauvegarder le nouveau contenu
-                  }
-                }}
+                value={editedContent}
                 onChange={(e) => {
+                  setEditedContent(e.target.value);
                   // Ajuste automatiquement la hauteur
                   e.target.style.height = 'auto';
                   e.target.style.height = e.target.scrollHeight + 'px';
+                }}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSaveEdit();
+                  }
                 }}
               />
             ) : (
@@ -99,6 +157,27 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp }) => {
             )
           )}
         </div>
+
+        {/* Contrôles de version */}
+        {versions && versions.length > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-1">
+            <button 
+              onClick={() => navigateVersion('prev')}
+              className="p-1 hover:bg-accent rounded-full"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-xs text-muted-foreground">
+              Version {currentVersionIndex + 1}/{versions.length}
+            </span>
+            <button 
+              onClick={() => navigateVersion('next')}
+              className="p-1 hover:bg-accent rounded-full"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
 
         {/* Temps de réponse pour les messages de l'assistant */}
         {type === 'assistant' && responseTime && (

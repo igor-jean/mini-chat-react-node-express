@@ -61,7 +61,8 @@ function App() {
             hour: '2-digit',
             minute: '2-digit',
           }),
-          ordre: msg.ordre
+          ordre: msg.ordre,
+          messageId: msg.id
         })));
       }
     } catch (error) {
@@ -221,6 +222,7 @@ function App() {
           <ChatBox 
             messages={messages} 
             isLoading={isLoading} 
+            currentConversationId={currentConversationId}
           />
           <MessageInput 
             onSend={handleSendMessage} 

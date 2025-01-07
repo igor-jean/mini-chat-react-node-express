@@ -7,7 +7,7 @@ import ClipLoader from 'react-spinners/ClipLoader';
 //   - messages: tableau des messages à afficher
 //   - isLoading: booléen indiquant si un chargement est en cours
 //   - isResetting: booléen indiquant si une réinitialisation est en cours
-const ChatBox = ({ messages, isLoading, isResetting }) => {
+const ChatBox = ({ messages, isLoading, isResetting, currentConversationId }) => {
   // Référence vers le dernier élément pour gérer le défilement
   const messagesEndRef = useRef(null);
 
@@ -41,8 +41,10 @@ const ChatBox = ({ messages, isLoading, isResetting }) => {
           content={message.content}
           responseTime={message.responseTime}
           timestamp={message.timestamp}
-          // Affiche un spinner si c'est un message de l'assistant en cours de réflexion
           showSpinner={message.type === 'assistant' && message.content === 'En train de réfléchir...'}
+          conversationId={currentConversationId}
+          ordre={message.ordre}
+          messageId={message.messageId}
         />
       ))}
       <div ref={messagesEndRef} />

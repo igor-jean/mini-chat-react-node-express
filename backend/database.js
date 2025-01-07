@@ -17,7 +17,6 @@ db.exec(`
         role TEXT,
         content TEXT,
         timestamp NUMERIC,
-        current_version INTEGER DEFAULT 1,
         ordre INTEGER DEFAULT 1,
         version_number INTEGER DEFAULT 1,
         FOREIGN KEY (conversation_id) REFERENCES conversations(id)
@@ -53,7 +52,27 @@ const queries = {
         )
         ORDER BY c.timestamp DESC
     `),
-    updateConversationTitle: db.prepare('UPDATE conversations SET title = ? WHERE id = ?')
+    updateConversationTitle: db.prepare('UPDATE conversations SET title = ? WHERE id = ?'),
+    getLastVersionNumber: db.prepare(`
+        SELECT version_number 
+        FROM messages 
+        WHERE conversation_id = ? AND ordre = ?
+        ORDER BY version_number DESC 
+        LIMIT 1
+    `),
+    getMessageVersionsCount: db.prepare(`
+        SELECT COUNT(*) as versions_count
+        FROM messages 
+        WHERE conversation_id = ? 
+        AND ordre = ?
+    `),
+    getAllVersionsForMessage: db.prepare(`
+        SELECT version_number, content, timestamp
+        FROM messages 
+        WHERE conversation_id = ? 
+        AND ordre = ?
+        ORDER BY version_number ASC
+    `)
 };
 
 // Modification de la fonction d'insertion
@@ -74,4 +93,25 @@ function insertNewMessage(conversationId, role, content, timestamp) {
     ).lastInsertRowid;
 }
 
-export { db, queries, insertNewMessage };
+// Nouvelle fonction pour vérifier les versions d'un message
+function checkMessageVersions(conversationId, ordre) {
+    const versionsCount = queries.getMessageVersionsCount.get(conversationId, ordre);
+    
+    if (versionsCount.versions_count > 1) {
+        // Si plusieurs versions existent, récupérer tous les détails
+        const versions = queries.getAllVersionsForMessage.all(conversationId, ordre);
+        return {
+            hasMultipleVersions: true,
+            count: versionsCount.versions_count,
+            versions: versions
+        };
+    }
+    
+    return {
+        hasMultipleVersions: false,
+        count: versionsCount.versions_count,
+        versions: []
+    };
+}
+
+export { db, queries, insertNewMessage, checkMessageVersions };
