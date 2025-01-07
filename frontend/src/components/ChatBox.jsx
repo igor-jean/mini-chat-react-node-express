@@ -22,18 +22,7 @@ const ChatBox = ({ messages, isLoading, isResetting, currentConversationId, onMe
   }, [messages]);
 
   return (
-    <div className="relative h-[500px] border border-border p-6 overflow-y-auto mb-5 bg-background shadow-sm">
-      {/* Affiche un overlay avec spinner pendant la réinitialisation */}
-      {isResetting && (
-        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center rounded-2xl z-50">
-          <div className="flex flex-col items-center gap-4">
-            <ClipLoader color="white" size={40} />
-            <span className="text-white font-medium">Réinitialisation...</span>
-          </div>
-        </div>
-      )}
-      
-      {/* Affiche la liste des messages avec leurs propriétés */}
+    <div className="relative h-[700px] border border-border p-6 overflow-y-auto mb-5 bg-background shadow-sm">
       {messages.map((message, index) => (
         <Message 
           key={index}

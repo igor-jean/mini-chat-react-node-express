@@ -225,9 +225,9 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-24">
-      <div className="max-w-6xl mx-auto p-4 flex gap-4">
-        <div className="w-64 border border-border rounded-2xl p-4">
+    <div className="min-h-screen bg-background p-12">
+      <div className="min-w-6xl mx-auto p-4 flex gap-4">
+        <div className="w-96 border border-border rounded-2xl p-4">
           <button
             onClick={createNewConversation}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 mb-4 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
