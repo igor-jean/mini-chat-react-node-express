@@ -7,7 +7,7 @@ import ClipLoader from 'react-spinners/ClipLoader';
 //   - messages: tableau des messages à afficher
 //   - isLoading: booléen indiquant si un chargement est en cours
 //   - isResetting: booléen indiquant si une réinitialisation est en cours
-const ChatBox = ({ messages, isLoading, isResetting, currentConversationId }) => {
+const ChatBox = ({ messages, isLoading, isResetting, currentConversationId, onMessageUpdate, currentVersion, onVersionChange }) => {
   // Référence vers le dernier élément pour gérer le défilement
   const messagesEndRef = useRef(null);
 
@@ -45,6 +45,10 @@ const ChatBox = ({ messages, isLoading, isResetting, currentConversationId }) =>
           conversationId={currentConversationId}
           ordre={message.ordre}
           messageId={message.messageId}
+          onMessageUpdate={onMessageUpdate}
+          totalVersions={message.totalVersions}
+          currentVersion={currentVersion}
+          onVersionChange={onVersionChange}
         />
       ))}
       <div ref={messagesEndRef} />

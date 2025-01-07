@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
 import { db, queries, insertNewMessage, checkMessageVersions } from './database.js';
+import { LLAMA_PARAMS, buildPrompt } from './llamaConfig.js';
 
 // Configuration de base du serveur Express
 const app = express();
@@ -41,39 +42,7 @@ app.post('/chat', async (req, res) => {
             .join('\n');
         
         // Modification du format du prompt pour suivre la documentation Llama
-        const fullPrompt = `<|start_header_id|>system<|end_header_id|>
-                Je suis MiniChat, une intelligence artificielle créée par Igor.  
-                Je suis un expert généraliste, compétent dans une large variété de domaines.
-
-                **Directives pour mes réponses** :  
-                - **Langue et clarté** :  
-                - Je réponds TOUJOURS en français, de manière claire et précise.  
-                - J'utilise un ton courtois, professionnel et adapté à chaque contexte.  
-
-                - **Structure et style** :  
-                - Je structure mes réponses en utilisant des titres, paragraphes, et listes formatées en **Markdown**.
-                - **Important** : J'utilise les balises de code (\`\`\` ou \`<code>\`) UNIQUEMENT lorsque je fournis un extrait de code ou un exemple technique.
-                - J'insère des retours à la ligne entre les étapes ou idées importantes.  
-
-                - **Véracité des informations** :  
-                - Je m'assure que mes réponses sont exactes et bien documentées.  
-                - Si je ne suis pas certain d'une information, je l'admets et propose des pistes de recherche.
-
-                - **Contexte utilisateur** :  
-                - Je mémorise les informations clés partagées par l'utilisateur (nom, centres d'intérêt, etc.) pour adapter mes réponses.  
-                - Si l'utilisateur me demande son nom ou d'autres données qu'il m'a fournies, je les restitue avec précision.  
-
-                - **Limites** :  
-                - Je ne prétends JAMAIS être humain. Je suis une IA honnête et transparente.  
-                - En cas de malentendu ou d'erreur, je corrige ma réponse immédiatement.  
-
-                <|eot_id|>
-
-                ${conversationContext}
-
-                <|start_header_id|>user<|end_header_id|>${message}<|eot_id|>
-                <|start_header_id|>assistant<|end_header_id|>
-                `;
+        const fullPrompt = buildPrompt(conversationContext, message);
 
         // Appel au serveur llama
         const llamaResponse = await fetch('http://localhost:8080/completion', {
@@ -83,18 +52,7 @@ app.post('/chat', async (req, res) => {
             },
             body: JSON.stringify({
                 prompt: fullPrompt,
-                temperature: 0.7,
-                cpu_threads: 4,
-                top_p: 0.95,
-                min_p: 0.05,
-                top_k: 30,
-                n_predict: 2048,
-                truncation_length: 8076, 
-                truncation_strategy: 1,
-                repeat_penalty: 1.2,
-                presence_penalty: 0.3,
-                frequency_penalty: 0.3,
-                stop: ["<|eot_id|>", "<|start_header_id|>"] // Nouveaux stop tokens
+                ...LLAMA_PARAMS
             })
         });
 
@@ -193,36 +151,37 @@ app.get('/conversations', (req, res) => {
 app.get('/conversation/:id', (req, res) => {
     try {
         const conversationId = req.params.id;
-        
-        // Récupérer la conversation depuis la base de données
         const conversation = queries.getConversation.get(conversationId);
         
         if (!conversation) {
-            return res.status(404).json({ 
-                error: 'Conversation non trouvée' 
-            });
+            return res.status(404).json({ error: 'Conversation non trouvée' });
         }
 
-        // Récupérer les messages de la conversation
-        const messages = queries.getMessages.all(conversationId).filter(msg => msg.version_number === 1);
+        // Récupérer les messages sans filtrer
+        const messages = queries.getMessages.all(conversationId);
 
-        res.json({
-            id: conversationId,
-            title: conversation.title,
-            messages: messages.map(msg => ({
+        // Pour chaque message, récupérer le nombre total de versions
+        const messagesWithVersionInfo = messages.map(msg => {
+            const versionsInfo = checkMessageVersions(conversationId, msg.ordre);
+            return {
                 role: msg.role,
                 content: msg.content,
                 timestamp: msg.timestamp,
                 ordre: msg.ordre,
-                id: msg.id
-            }))
+                id: msg.id,
+                totalVersions: versionsInfo.count,
+                currentVersion: msg.version_number
+            };
+        });
+
+        res.json({
+            id: conversationId,
+            title: conversation.title,
+            messages: messagesWithVersionInfo
         });
     } catch (error) {
-        console.error('Erreur lors de la récupération de la conversation:', error);
-        res.status(500).json({ 
-            error: 'Erreur lors de la récupération de la conversation',
-            details: error.message 
-        });
+        console.error('Erreur:', error);
+        res.status(500).json({ error: 'Erreur lors de la récupération' });
     }
 });
 
@@ -246,30 +205,80 @@ app.delete('/conversations/:id', (req, res) => {
     }
 });
 
-// Nouvelle route pour modifier un message
-app.put('/messages/:messageId', (req, res) => {
+// route pour modifier un message
+app.put('/messages/:messageId', async (req, res) => {
     try {
         const { messageId } = req.params;
         const { content } = req.body;
         const now = new Date().toISOString();
 
-        // Récupérer la dernière version
-        const { latest_version } = queries.getLatestVersionNumber.get(messageId);
-        const newVersionNumber = (latest_version || 0) + 1;
+        // Récupérer les informations du message original
+        const originalMessage = db.prepare(`
+            SELECT conversation_id, ordre
+            FROM messages 
+            WHERE id = ?
+        `).get(messageId);
 
-        // Insérer la nouvelle version
-        queries.insertMessageVersion.run(messageId, content, newVersionNumber);
+        // Récupérer la dernière version
+        const lastVersion = queries.getLastVersionNumber.get(
+            originalMessage.conversation_id, 
+            originalMessage.ordre
+        );
+        const newVersionNumber = (lastVersion?.version_number || 0) + 1;
+
+        // Insérer la nouvelle version du message utilisateur
+        queries.insertMessageVersion.run(
+            content,
+            newVersionNumber,
+            messageId
+        );
         
-        // Mettre à jour la version courante
-        queries.updateMessageCurrentVersion.run(newVersionNumber, messageId);
+        // Construire le contexte pour l'assistant
+        const messages = queries.getMessages.all(originalMessage.conversation_id)
+            .filter(msg => msg.version_number === newVersionNumber);
+
+        const conversationContext = messages
+            .map(msg => `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`)
+            .join('\n');
+
+        const fullPrompt = buildPrompt(conversationContext, content);
+
+        // Appel au serveur llama
+        const llamaResponse = await fetch('http://localhost:8080/completion', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                prompt: fullPrompt,
+                ...LLAMA_PARAMS
+            })
+        });
+
+        const data = await llamaResponse.json();
+        const cleanResponse = data.content
+            .replace(/<\|eot_id\|>.*$/s, '')
+            .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '')
+            .trim();
+
+        // Insérer la réponse de l'assistant avec la même version
+        queries.insertMessage.run(
+            originalMessage.conversation_id,
+            'assistant',
+            cleanResponse,
+            now,
+            originalMessage.ordre + 1,
+            newVersionNumber
+        );
 
         res.json({ 
             messageId, 
             versionNumber: newVersionNumber,
-            timestamp: now 
+            timestamp: now,
+            assistantResponse: cleanResponse
         });
     } catch (error) {
-        console.error('Erreur lors de la modification du message:', error);
+        console.error('Erreur:', error);
         res.status(500).json({ 
             error: 'Erreur lors de la modification',
             details: error.message 
@@ -369,6 +378,44 @@ app.post('/messages/version', async (req, res) => {
             error: 'Erreur lors de la création de la nouvelle version',
             details: error.message 
         });
+    }
+});
+
+// Route pour charger une version spécifique de la conversation
+app.get('/conversation/:id/version/:versionNumber', (req, res) => {
+    try {
+        const { id: conversationId, versionNumber } = req.params;
+        const conversation = queries.getConversation.get(conversationId);
+        
+        if (!conversation) {
+            return res.status(404).json({ error: 'Conversation non trouvée' });
+        }
+
+        // Récupérer tous les messages de cette version
+        const messages = queries.getMessagesForVersion.all(conversationId, versionNumber);
+
+        const messagesWithVersionInfo = messages.map(msg => {
+            const versionsInfo = checkMessageVersions(conversationId, msg.ordre);
+            return {
+                role: msg.role,
+                content: msg.content,
+                timestamp: msg.timestamp,
+                ordre: msg.ordre,
+                id: msg.id,
+                totalVersions: versionsInfo.count,
+                currentVersion: parseInt(versionNumber)
+            };
+        });
+
+        res.json({
+            id: conversationId,
+            title: conversation.title,
+            messages: messagesWithVersionInfo,
+            currentVersion: parseInt(versionNumber)
+        });
+    } catch (error) {
+        console.error('Erreur:', error);
+        res.status(500).json({ error: 'Erreur lors de la récupération' });
     }
 });
 

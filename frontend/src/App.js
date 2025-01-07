@@ -18,6 +18,7 @@ function App() {
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState(1);
 
   useEffect(() => {
     fetchConversations();
@@ -62,8 +63,11 @@ function App() {
             minute: '2-digit',
           }),
           ordre: msg.ordre,
-          messageId: msg.id
+          messageId: msg.id,
+          totalVersions: msg.totalVersions,
+          currentVersion: msg.totalVersions
         })));
+        setCurrentVersion(data.messages[0]?.totalVersions || 1);
       }
     } catch (error) {
       console.error('Erreur lors du chargement des messages:', error);
@@ -96,8 +100,19 @@ function App() {
     });
     
     setMessages(prev => [...prev, 
-      { type: 'user', content: message, timestamp },
-      { type: 'assistant', content: 'En train de réfléchir...' }
+      { 
+        type: 'user', 
+        content: message, 
+        timestamp,
+        totalVersions: 1,
+        currentVersion: 1
+      },
+      { 
+        type: 'assistant', 
+        content: 'En train de réfléchir...',
+        totalVersions: 1,
+        currentVersion: 1
+      }
     ]);
 
     try {
@@ -165,6 +180,50 @@ function App() {
     }
   };
 
+  const handleMessageUpdate = async (messageId, newContent, assistantResponse) => {
+    setMessages(prevMessages => {
+      const newMessages = [...prevMessages];
+      // Trouve et met à jour le message utilisateur
+      const userMessageIndex = newMessages.findIndex(msg => msg.messageId === messageId);
+      if (userMessageIndex !== -1) {
+        newMessages[userMessageIndex] = {
+          ...newMessages[userMessageIndex],
+          content: newContent
+        };
+        // Met à jour la réponse de l'assistant qui suit
+        if (userMessageIndex + 1 < newMessages.length) {
+          newMessages[userMessageIndex + 1] = {
+            ...newMessages[userMessageIndex + 1],
+            content: assistantResponse
+          };
+        }
+      }
+      return newMessages;
+    });
+  };
+
+  const handleVersionChange = async (conversationId, newVersion) => {
+    try {
+      const response = await api.get(`/conversation/${conversationId}/version/${newVersion}`);
+      const formattedMessages = response.data.messages.map(msg => ({
+        type: msg.role,
+        content: msg.content,
+        timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        ordre: msg.ordre,
+        messageId: msg.id,
+        totalVersions: msg.totalVersions,
+        currentVersion: newVersion
+      }));
+      setMessages(formattedMessages);
+      setCurrentVersion(newVersion);
+    } catch (error) {
+      console.error('Erreur lors du changement de version:', error);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background pt-24">
       <div className="max-w-6xl mx-auto p-4 flex gap-4">
@@ -223,6 +282,9 @@ function App() {
             messages={messages} 
             isLoading={isLoading} 
             currentConversationId={currentConversationId}
+            onMessageUpdate={handleMessageUpdate}
+            currentVersion={currentVersion}
+            onVersionChange={handleVersionChange}
           />
           <MessageInput 
             onSend={handleSendMessage} 

@@ -21,7 +21,9 @@ const api = axios.create({
 //   - conversationId: ID de la conversation
 //   - ordre: ordre du message dans la conversation
 //   - messageId: ID du message
-const Message = ({ type, content, showSpinner, responseTime, timestamp, conversationId, ordre, messageId }) => {
+//   - totalVersions: nombre total de versions du message
+//   - currentVersion: version actuelle du message
+const Message = ({ type, content, showSpinner, responseTime, timestamp, conversationId, ordre, messageId, onMessageUpdate, totalVersions, currentVersion, onVersionChange, ...props }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
   const [versions, setVersions] = useState(null);
@@ -49,164 +51,171 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp, conversa
   }, [messageId]);
 
   // Navigation entre les versions
-  const navigateVersion = (direction) => {
-    const newIndex = direction === 'next' 
-      ? (currentVersionIndex + 1) % versions.length 
-      : (currentVersionIndex - 1 + versions.length) % versions.length;
-    setCurrentVersionIndex(newIndex);
-    setEditedContent(versions[newIndex].content);
+  const navigateVersion = async (direction) => {
+    if (!onVersionChange || !conversationId) return;
+    
+    const newVersion = direction === 'next' ? currentVersion + 1 : currentVersion - 1;
+    if (newVersion >= 1 && newVersion <= totalVersions) {
+      onVersionChange(conversationId, newVersion);
+    }
   };
 
   const handleSaveEdit = async () => {
     try {
       if (editedContent !== content) {
-        await api.post('/messages/version', {
-          conversation_id: conversationId,
-          ordre: ordre,
+        const response = await api.put(`/messages/${messageId}`, {
           content: editedContent
         });
-        // Vous pouvez ajouter ici un callback pour mettre à jour la liste des messages
-        // onMessageUpdate(editedContent);
+        
+        // Mettre à jour l'interface avec la nouvelle version et la réponse de l'assistant
+        const { versionNumber, assistantResponse } = response.data;
+        
+        // Appeler une fonction de mise à jour fournie par le parent
+        onMessageUpdate(editedContent, assistantResponse, versionNumber);
       }
       setIsEditing(false);
     } catch (error) {
       console.error('Erreur lors de la modification du message:', error);
-      // Optionnel : ajouter une notification d'erreur
     }
   };
 
   return (
-    // Container principal avec alignement conditionnel selon le type de message
-    <div className={`flex ${type === 'user' ? 'justify-end' : 'justify-start'} mb-3 items-end`}>
-      {type === 'assistant' && (
-        <div className="flex flex-col items-center mr-2">
-          <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
-            <Bot className="w-5 h-5 text-secondary" />
+    <div className={`flex flex-col ${type === 'user' ? 'items-end' : 'items-start'} mb-3`}>
+      <div className={`flex ${type === 'user' ? 'justify-end' : 'justify-start'} items-end`}>
+        {type === 'assistant' && (
+          <div className="flex flex-col items-center mr-2">
+            <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
+              <Bot className="w-5 h-5 text-secondary" />
+            </div>
+            {timestamp && !showSpinner && (
+              <span className="text-xs text-muted-foreground">
+                {timestamp}
+              </span>
+            )}
           </div>
-          {timestamp && !showSpinner && (
-            <span className="text-xs text-muted-foreground">
-              {timestamp}
-            </span>
-          )}
-        </div>
-      )}
+        )}
 
-      <div className="flex flex-col max-w-[70%]">
-        <div className={`
-          px-4 py-3 rounded-[0.5rem] text-white relative group
-          ${type === 'user' 
-            ? 'bg-primary' 
-            : 'bg-secondary'}
-        `}>
-          {type === 'user' && (
-            <div className="absolute right-1 bottom-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              {isEditing ? (
-                <div className="flex gap-1">
-                  <Check 
-                    className="w-4 h-4 text-white/80 hover:text-white cursor-pointer" 
-                    onClick={handleSaveEdit} 
+        <div className="flex flex-col max-w-[70%]">
+          <div className={`
+            px-4 py-3 rounded-[0.5rem] text-white relative group
+            ${type === 'user' 
+              ? 'bg-primary' 
+              : 'bg-secondary'}
+          `}>
+            {type === 'user' && (
+              <div className="absolute right-1 bottom-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {isEditing ? (
+                  <div className="flex gap-1">
+                    <Check 
+                      className="w-4 h-4 text-white/80 hover:text-white cursor-pointer" 
+                      onClick={handleSaveEdit} 
+                    />
+                    <X 
+                      className="w-4 h-4 text-white/80 hover:text-white cursor-pointer" 
+                      onClick={() => {
+                        setIsEditing(false);
+                        setEditedContent(content); // Réinitialiser le contenu édité
+                      }} 
+                    />
+                  </div>
+                ) : (
+                  <Edit 
+                    className="w-4 h-4 text-white/80 hover:text-white" 
+                    onClick={() => setIsEditing(true)} 
                   />
-                  <X 
-                    className="w-4 h-4 text-white/80 hover:text-white cursor-pointer" 
-                    onClick={() => {
-                      setIsEditing(false);
-                      setEditedContent(content); // Réinitialiser le contenu édité
-                    }} 
-                  />
-                </div>
-              ) : (
-                <Edit 
-                  className="w-4 h-4 text-white/80 hover:text-white" 
-                  onClick={() => setIsEditing(true)} 
+                )}
+              </div>
+            )}
+            {type === 'assistant' ? (
+              <ReactMarkdown className="prose prose-invert max-w-none
+                prose-headings:text-blue-300
+                prose-p:text-gray-100
+                prose-strong:text-yellow-300
+                prose-em:text-green-300
+                prose-code:text-pink-300
+                prose-ul:text-gray-100
+                prose-li:text-gray-100">
+                {content}
+              </ReactMarkdown>
+            ) : (
+              isEditing ? (
+                <textarea 
+                  className='w-full bg-transparent outline-none text-white resize-none min-h-[24px] overflow-y-hidden'
+                  value={editedContent}
+                  onChange={(e) => {
+                    setEditedContent(e.target.value);
+                    // Ajuste automatiquement la hauteur
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                  }}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSaveEdit();
+                    }
+                  }}
                 />
-              )}
+              ) : (
+                content
+              )
+            )}
+          </div>
+
+          {/* Contrôles de version - uniquement pour les messages utilisateur avec plusieurs versions */}
+          {type === 'user' && totalVersions > 1 && (
+            <div className="flex items-center gap-2 mt-2 bg-accent/10 px-2 py-1 rounded-md">
+              <button 
+                onClick={() => navigateVersion('prev')}
+                disabled={currentVersion === 1}
+                className="p-1 hover:bg-accent rounded-full disabled:opacity-50"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              
+              <span className="text-sm text-muted-foreground">
+                Version {currentVersion}/{totalVersions}
+              </span>
+              
+              <button 
+                onClick={() => navigateVersion('next')}
+                disabled={currentVersion === totalVersions}
+                className="p-1 hover:bg-accent rounded-full disabled:opacity-50"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           )}
-          {type === 'assistant' ? (
-            <ReactMarkdown className="prose prose-invert max-w-none
-              prose-headings:text-blue-300
-              prose-p:text-gray-100
-              prose-strong:text-yellow-300
-              prose-em:text-green-300
-              prose-code:text-pink-300
-              prose-ul:text-gray-100
-              prose-li:text-gray-100">
-              {content}
-            </ReactMarkdown>
-          ) : (
-            isEditing ? (
-              <textarea 
-                className='w-full bg-transparent outline-none text-white resize-none min-h-[24px] overflow-y-hidden'
-                value={editedContent}
-                onChange={(e) => {
-                  setEditedContent(e.target.value);
-                  // Ajuste automatiquement la hauteur
-                  e.target.style.height = 'auto';
-                  e.target.style.height = e.target.scrollHeight + 'px';
-                }}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSaveEdit();
-                  }
-                }}
-              />
-            ) : (
-              content
-            )
+
+          {/* Temps de réponse pour les messages de l'assistant */}
+          {type === 'assistant' && responseTime && (
+            <span className="text-xs text-muted-foreground mt-1 ml-1">
+              Temps de réponse : {responseTime}s
+            </span>
           )}
         </div>
 
-        {/* Contrôles de version */}
-        {versions && versions.length > 1 && (
-          <div className="flex items-center justify-center gap-2 mt-1">
-            <button 
-              onClick={() => navigateVersion('prev')}
-              className="p-1 hover:bg-accent rounded-full"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-xs text-muted-foreground">
-              Version {currentVersionIndex + 1}/{versions.length}
-            </span>
-            <button 
-              onClick={() => navigateVersion('next')}
-              className="p-1 hover:bg-accent rounded-full"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+        {/* Avatar et timestamp pour l'utilisateur (affiché à droite) */}
+        {type === 'user' && (
+          <div className="flex flex-col items-center ml-2">
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
+              <User className="w-5 h-5 text-primary" />
+            </div>
+            {timestamp && (
+              <span className="text-xs text-muted-foreground">
+                {timestamp}
+              </span>
+            )}
           </div>
         )}
 
-        {/* Temps de réponse pour les messages de l'assistant */}
-        {type === 'assistant' && responseTime && (
-          <span className="text-xs text-muted-foreground mt-1 ml-1">
-            Temps de réponse : {responseTime}s
-          </span>
+        {/* Spinner de chargement pendant la génération de réponse */}
+        {showSpinner && (
+          <div className="h-[45px] w-[45px] flex justify-center items-center">
+            <ClipLoader color="var(--muted-foreground)" size={15} />
+          </div>
         )}
       </div>
-
-      {/* Avatar et timestamp pour l'utilisateur (affiché à droite) */}
-      {type === 'user' && (
-        <div className="flex flex-col items-center ml-2">
-          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
-            <User className="w-5 h-5 text-primary" />
-          </div>
-          {timestamp && (
-            <span className="text-xs text-muted-foreground">
-              {timestamp}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Spinner de chargement pendant la génération de réponse */}
-      {showSpinner && (
-        <div className="h-[45px] w-[45px] flex justify-center items-center">
-          <ClipLoader color="var(--muted-foreground)" size={15} />
-        </div>
-      )}
     </div>
   );
 };

@@ -33,9 +33,15 @@ const queries = {
     `),
     getConversation: db.prepare('SELECT * FROM conversations WHERE id = ?'),
     getMessages: db.prepare(`
-        SELECT * FROM messages 
-        WHERE conversation_id = ?
-        ORDER BY ordre ASC
+        SELECT m.* FROM messages m
+        WHERE m.conversation_id = ? 
+        AND m.version_number = (
+            SELECT MAX(version_number) 
+            FROM messages 
+            WHERE conversation_id = m.conversation_id 
+            AND ordre = m.ordre
+        )
+        ORDER BY m.ordre ASC
     `),
     updateConversationTimestamp: db.prepare('UPDATE conversations SET timestamp = ? WHERE id = ?'),
     deleteConversation: db.prepare('DELETE FROM conversations WHERE id = ?'),
@@ -72,7 +78,19 @@ const queries = {
         WHERE conversation_id = ? 
         AND ordre = ?
         ORDER BY version_number ASC
-    `)
+    `),
+    insertMessageVersion: db.prepare(`
+        INSERT INTO messages (conversation_id, role, content, timestamp, ordre, version_number) 
+        SELECT conversation_id, role, ?, datetime('now'), ordre, ?
+        FROM messages 
+        WHERE id = ?
+    `),
+    getMessagesForVersion: db.prepare(`
+        SELECT * FROM messages 
+        WHERE conversation_id = ? 
+        AND version_number = ?
+        ORDER BY ordre ASC
+    `),
 };
 
 // Modification de la fonction d'insertion
