@@ -2,132 +2,39 @@ import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
 import { v4 as uuidv4 } from 'uuid';
-import Database from 'better-sqlite3';
-
-// Initialisation de la base de données
-const db = new Database('chat.db');
-
-// Création des tables
-db.exec(`
-    CREATE TABLE IF NOT EXISTS conversations (
-        id TEXT PRIMARY KEY,
-        title TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-    );
-    
-    CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conversation_id TEXT,
-        role TEXT,
-        content TEXT,
-        current_version INTEGER DEFAULT 1,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id)
-    );
-
-    CREATE TABLE IF NOT EXISTS message_versions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        message_id INTEGER,
-        content TEXT,
-        version_number INTEGER,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (message_id) REFERENCES messages(id)
-    );
-`);
-
-// Préparation des requêtes
-const insertConversation = db.prepare('INSERT INTO conversations (id, title, timestamp) VALUES (?, ?, ?)');
-const insertMessage = db.prepare(`
-    INSERT INTO messages (conversation_id, role, content, timestamp) 
-    VALUES (?, ?, ?, ?) 
-    RETURNING id
-`);
-const getConversation = db.prepare('SELECT * FROM conversations WHERE id = ?');
-const getMessages = db.prepare(`
-    SELECT m.*, mv.content as version_content 
-    FROM messages m 
-    JOIN message_versions mv ON m.id = mv.message_id 
-    WHERE m.conversation_id = ? 
-    AND mv.version_number = m.current_version 
-    ORDER BY m.timestamp
-`);
-const updateConversationTimestamp = db.prepare('UPDATE conversations SET timestamp = ? WHERE id = ?');
-const deleteConversation = db.prepare('DELETE FROM conversations WHERE id = ?');
-const deleteMessages = db.prepare('DELETE FROM messages WHERE conversation_id = ?');
-const getConversations = db.prepare(`
-    SELECT c.*, m.content as lastMessage 
-    FROM conversations c 
-    LEFT JOIN messages m ON m.conversation_id = c.id 
-    WHERE m.id = (
-        SELECT id FROM messages 
-        WHERE conversation_id = c.id 
-        ORDER BY timestamp DESC 
-        LIMIT 1
-    )
-    ORDER BY c.timestamp DESC
-`);
-
-// Nouvelles requêtes préparées
-const insertMessageVersion = db.prepare(`
-    INSERT INTO message_versions (message_id, content, version_number) 
-    VALUES (?, ?, ?)
-`);
-
-const getMessageVersions = db.prepare(`
-    SELECT * FROM message_versions 
-    WHERE message_id = ? 
-    ORDER BY version_number
-`);
-
-const updateMessageCurrentVersion = db.prepare(`
-    UPDATE messages 
-    SET current_version = ? 
-    WHERE id = ?
-`);
-
-const getLatestVersionNumber = db.prepare(`
-    SELECT MAX(version_number) as latest_version 
-    FROM message_versions 
-    WHERE message_id = ?
-`);
+import { queries, insertNewMessage } from './database.js';
 
 // Configuration de base du serveur Express
-// --------------------------------------
-// Initialisation d'Express et des middlewares
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Gestion des données
-// -----------------
-// Stockage en mémoire des conversations avec Map()
-
 // Route POST pour le chat
 app.post('/chat', async (req, res) => {
     try {
-        const { message, sessionId } = req.body;
-        const currentSessionId = sessionId || uuidv4();
+        let { message, conversationId } = req.body;
         const now = new Date().toISOString();
 
         // Vérifier si la conversation existe
-        let conversation = getConversation.get(currentSessionId);
+        let conversation = queries.getConversation.get(conversationId);
         if (!conversation) {
             // Créer nouvelle conversation
-            insertConversation.run(currentSessionId, '', now);
-            conversation = { id: currentSessionId, title: '' };
+            const result = queries.insertConversation.run('', now);
+            conversationId = result.lastInsertRowid;
+            conversation = { title: '' };
         }
 
         // Récupérer les messages existants
-        const messages = getMessages.all(currentSessionId);
+        const messages = queries.getMessages.all(conversationId);
 
         // Définir le titre si c'est le premier message
         if (messages.length === 0 && !conversation.title) {
             const title = message.length > 25 ? message.substring(0, 25) + '...' : message;
-            db.prepare('UPDATE conversations SET title = ? WHERE id = ?').run(title, currentSessionId);
+            queries.updateConversationTitle.run(title, conversationId);
         }
 
         // Ajouter le message de l'utilisateur
-        insertNewMessage(currentSessionId, 'user', message, now);
+        const userMessageId = insertNewMessage(conversationId, 'user', message, now);
 
         // Construire le contexte complet avec l'historique
         const conversationContext = messages
@@ -201,14 +108,14 @@ app.post('/chat', async (req, res) => {
             .trim();
         
         // Ajouter la réponse à l'historique
-        insertNewMessage(currentSessionId, 'assistant', cleanResponse, now);
+        const assistantMessageId = insertNewMessage(conversationId, 'assistant', cleanResponse, now);
         
         // Mettre à jour le timestamp de la conversation
-        updateConversationTimestamp.run(now, currentSessionId);
+        queries.updateConversationTimestamp.run(now, conversationId);
 
         res.json({ 
             response: cleanResponse,
-            conversationId: currentSessionId
+            conversationId: conversationId
         });
     } catch (error) {
         console.error('Erreur:', error);
@@ -231,7 +138,7 @@ app.post('/reset/:id', async (req, res) => {
         }
 
         // Vérifier si la conversation existe
-        const conversation = getConversation.get(conversationId);
+        const conversation = queries.getConversation.get(conversationId);
         if (!conversation) {
             return res.status(404).json({ 
                 error: 'Conversation non trouvée' 
@@ -239,7 +146,7 @@ app.post('/reset/:id', async (req, res) => {
         }
 
         // Supprimer les messages d'abord (à cause de la clé étrangère)
-        deleteMessages.run(conversationId);
+        queries.deleteMessages.run(conversationId);
 
         res.json({ message: 'Session réinitialisée avec succès' });
     } catch (error) {
@@ -254,9 +161,11 @@ app.post('/reset/:id', async (req, res) => {
 // Modifier la route pour créer une nouvelle conversation
 app.post('/conversations', (req, res) => {
     try {
-        const id = uuidv4();
         const now = new Date().toISOString();
-        insertConversation.run(id, '', now);
+        // On insère une nouvelle conversation avec un titre vide
+        const result = queries.insertConversation.run('', now);
+        // On récupère l'ID généré automatiquement
+        const id = result.lastInsertRowid;
         res.json({ id });
     } catch (error) {
         console.error('Erreur:', error);
@@ -270,7 +179,7 @@ app.post('/conversations', (req, res) => {
 // Après les routes existantes, ajoutez la route GET pour les conversations
 app.get('/conversations', (req, res) => {
     try {
-        const conversations = getConversations.all();
+        const conversations = queries.getConversations.all();
         res.json(conversations);
     } catch (error) {
         console.error('Erreur:', error);
@@ -287,7 +196,7 @@ app.get('/conversation/:id', (req, res) => {
         const conversationId = req.params.id;
         
         // Récupérer la conversation depuis la base de données
-        const conversation = getConversation.get(conversationId);
+        const conversation = queries.getConversation.get(conversationId);
         
         if (!conversation) {
             return res.status(404).json({ 
@@ -296,7 +205,7 @@ app.get('/conversation/:id', (req, res) => {
         }
 
         // Récupérer les messages de la conversation
-        const messages = getMessages.all(conversationId);
+        const messages = queries.getMessages.all(conversationId);
 
         res.json({
             id: conversationId,
@@ -322,9 +231,9 @@ app.delete('/conversations/:id', (req, res) => {
         const conversationId = req.params.id;
         
         // Supprimer les messages d'abord (à cause de la clé étrangère)
-        deleteMessages.run(conversationId);
+        queries.deleteMessages.run(conversationId);
         // Puis supprimer la conversation
-        deleteConversation.run(conversationId);
+        queries.deleteConversation.run(conversationId);
         
         res.json({ message: 'Conversation supprimée avec succès' });
     } catch (error) {
@@ -336,24 +245,6 @@ app.delete('/conversations/:id', (req, res) => {
     }
 });
 
-// Modification de la fonction d'insertion de message
-function insertNewMessage(conversationId, role, content, timestamp) {
-    const db = new Database('chat.db');
-    try {
-        return db.transaction(() => {
-            // Insérer le message et récupérer son ID
-            const { id: messageId } = insertMessage.run(conversationId, role, content, timestamp);
-            
-            // Créer la première version
-            insertMessageVersion.run(messageId, content, 1);
-            
-            return messageId;
-        })();
-    } finally {
-        db.close();
-    }
-}
-
 // Nouvelle route pour modifier un message
 app.put('/messages/:messageId', (req, res) => {
     try {
@@ -362,14 +253,14 @@ app.put('/messages/:messageId', (req, res) => {
         const now = new Date().toISOString();
 
         // Récupérer la dernière version
-        const { latest_version } = getLatestVersionNumber.get(messageId);
+        const { latest_version } = queries.getLatestVersionNumber.get(messageId);
         const newVersionNumber = (latest_version || 0) + 1;
 
         // Insérer la nouvelle version
-        insertMessageVersion.run(messageId, content, newVersionNumber);
+        queries.insertMessageVersion.run(messageId, content, newVersionNumber);
         
         // Mettre à jour la version courante
-        updateMessageCurrentVersion.run(newVersionNumber, messageId);
+        queries.updateMessageCurrentVersion.run(newVersionNumber, messageId);
 
         res.json({ 
             messageId, 
@@ -389,7 +280,7 @@ app.put('/messages/:messageId', (req, res) => {
 app.get('/messages/:messageId/versions', (req, res) => {
     try {
         const { messageId } = req.params;
-        const versions = getMessageVersions.all(messageId);
+        const versions = queries.getMessageVersions.all(messageId);
         
         res.json(versions);
     } catch (error) {
@@ -406,10 +297,7 @@ app.get('/messages/:messageId/versions/:versionNumber', (req, res) => {
     try {
         const { messageId, versionNumber } = req.params;
         
-        const version = db.prepare(`
-            SELECT * FROM message_versions 
-            WHERE message_id = ? AND version_number = ?
-        `).get(messageId, versionNumber);
+        const version = queries.getMessageVersion.get(messageId, versionNumber);
 
         if (!version) {
             return res.status(404).json({ 

@@ -45,8 +45,6 @@ const ChatBox = ({ messages, isLoading, isResetting }) => {
           showSpinner={message.type === 'assistant' && message.content === 'En train de réfléchir...'}
         />
       ))}
-      
-      {/* Élément invisible utilisé comme référence pour le défilement */}
       <div ref={messagesEndRef} />
     </div>
   );

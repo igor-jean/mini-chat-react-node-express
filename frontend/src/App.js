@@ -18,7 +18,6 @@ function App() {
   const [conversations, setConversations] = useState([]);
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [isResetting, setIsResetting] = useState(false);
 
   useEffect(() => {
     fetchConversations();
@@ -37,7 +36,13 @@ function App() {
   const fetchConversations = async () => {
     try {
       const { data } = await api.get('/conversations');
-      setConversations(data);
+      setConversations(data.map(conv => ({
+        ...conv,
+        timestamp: new Date(conv.timestamp).toLocaleTimeString('fr-FR', {
+          hour: '2-digit',
+          minute: '2-digit',
+        })
+      })));
     } catch (error) {
       console.error('Erreur lors du chargement des conversations:', error);
     }
@@ -48,13 +53,15 @@ function App() {
     try {
       const { data } = await api.get(`/conversation/${conversationId}`);
       if (data.messages) {
-        setMessages(data.messages.map(msg => ({
+        const sortedMessages = data.messages.sort((a, b) => a.ordre - b.ordre);
+        setMessages(sortedMessages.map(msg => ({
           type: msg.role,
           content: msg.content,
           timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
             hour: '2-digit',
             minute: '2-digit',
-          })
+          }),
+          ordre: msg.ordre
         })));
       }
     } catch (error) {
@@ -68,9 +75,11 @@ function App() {
   const createNewConversation = async () => {
     try {
       const { data } = await api.post('/conversations');
-      setCurrentConversationId(data.id);
-      setMessages([]);
-      await fetchConversations();
+      if (data.id) {  // Vérification que l'ID est bien retourné
+        setCurrentConversationId(data.id);
+        setMessages([]);
+        await fetchConversations();
+      }
     } catch (error) {
       console.error('Erreur lors de la création de la conversation:', error);
     }
@@ -93,7 +102,7 @@ function App() {
     try {
       const { data } = await api.post('/chat', {
         message,
-        sessionId: currentConversationId
+        conversationId: currentConversationId
       });
       
       if (!currentConversationId) {
@@ -136,21 +145,6 @@ function App() {
       });
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  //  Réinitialise la conversation en cours en effaçant tous les messages
-  const handleReset = async () => {
-    setIsResetting(true);
-    try {
-      await api.post(`/reset/${currentConversationId}`);
-      setMessages([]);
-    } catch (error) {
-      console.error('Erreur lors de la réinitialisation:', error);
-    } finally {
-      setTimeout(() => {
-        setIsResetting(false);
-      }, 1000);
     }
   };
 
@@ -202,7 +196,7 @@ function App() {
                     currentConversationId === conv.id ? 'bg-accent' : ''
                   }`}
                 >
-                  <X className="w-4 h-4" />
+                  <X/>
                 </button>
               </div>
             ))}
@@ -217,21 +211,20 @@ function App() {
               <Bot className="w-8 h-8 text-black" />
             </div>
             <button
-              onClick={handleReset}
-              disabled={isResetting}
+              onClick={() => currentConversationId && deleteConversation(currentConversationId, new Event('click'))}
+              disabled={!currentConversationId}
               className="absolute right-4 top-1/2 -translate-y-1/2 px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <RefreshCw className={`w-4 h-4 ${isResetting ? 'animate-spin' : ''}`} />
+              <X className="w-4 h-4" />
             </button>
           </div>
           <ChatBox 
             messages={messages} 
             isLoading={isLoading} 
-            isResetting={isResetting} 
           />
           <MessageInput 
             onSend={handleSendMessage} 
-            disabled={isLoading || isResetting} 
+            disabled={isLoading} 
           />
         </div>
       </div>
