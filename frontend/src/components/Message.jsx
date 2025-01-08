@@ -28,6 +28,7 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp, conversa
   const [editedContent, setEditedContent] = useState(content);
   const [versions, setVersions] = useState(null);
   const [currentVersionIndex, setCurrentVersionIndex] = useState(0);
+  const [updateKey, setUpdateKey] = useState(0);
 
   // Fonction pour charger les versions du message
   const fetchVersions = async () => {
@@ -48,7 +49,7 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp, conversa
     if (messageId) {
       fetchVersions();
     }
-  }, [messageId]);
+  }, [messageId, updateKey]);
 
   // Si la version du message ne correspond pas à la version actuelle, ne pas l'afficher
   if (version && currentVersion && version !== currentVersion) {
@@ -73,13 +74,12 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp, conversa
           content: editedContent
         });
         
-        // Mettre à jour l'interface avec la nouvelle version et la réponse de l'assistant
         const { versionNumber, assistantResponse } = response.data;
         
-        // Appeler une fonction de mise à jour fournie par le parent
-        onMessageUpdate(editedContent, assistantResponse, versionNumber);
+        // Mettre à jour l'interface avec les nouvelles versions
+        onMessageUpdate(messageId, editedContent, assistantResponse, versionNumber);
+        setIsEditing(false);
       }
-      setIsEditing(false);
     } catch (error) {
       console.error('Erreur lors de la modification du message:', error);
     }

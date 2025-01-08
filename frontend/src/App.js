@@ -190,24 +190,33 @@ function App() {
     }
   };
 
-  const handleMessageUpdate = async (messageId, newContent, assistantResponse) => {
+  const handleMessageUpdate = async (messageId, newContent, assistantResponse, newVersionNumber) => {
     setMessages(prevMessages => {
       const newMessages = [...prevMessages];
       // Trouve et met à jour le message utilisateur
       const userMessageIndex = newMessages.findIndex(msg => msg.messageId === messageId);
       if (userMessageIndex !== -1) {
+        // Mise à jour du message utilisateur
         newMessages[userMessageIndex] = {
           ...newMessages[userMessageIndex],
-          content: newContent
+          content: newContent,
+          totalVersions: newVersionNumber, // Utiliser le nouveau numéro de version
+          currentVersion: newVersionNumber // Mettre à jour la version courante
         };
+        
         // Met à jour la réponse de l'assistant qui suit
         if (userMessageIndex + 1 < newMessages.length) {
           newMessages[userMessageIndex + 1] = {
             ...newMessages[userMessageIndex + 1],
-            content: assistantResponse
+            content: assistantResponse,
+            totalVersions: newVersionNumber,
+            currentVersion: newVersionNumber
           };
         }
       }
+      // Mettre à jour les états globaux
+      setCurrentVersion(newVersionNumber);
+      setVersionNumber(newVersionNumber);
       return newMessages;
     });
   };
