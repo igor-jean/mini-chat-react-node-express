@@ -23,7 +23,7 @@ const api = axios.create({
 //   - messageId: ID du message
 //   - totalVersions: nombre total de versions du message
 //   - currentVersion: version actuelle du message
-const Message = ({ type, content, showSpinner, responseTime, timestamp, conversationId, ordre, messageId, onMessageUpdate, totalVersions, currentVersion, onVersionChange, ...props }) => {
+const Message = ({ type, content, showSpinner, responseTime, timestamp, conversationId, ordre, messageId, onMessageUpdate, totalVersions, currentVersion, onVersionChange, setVersionNumber, version, ...props }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
   const [versions, setVersions] = useState(null);
@@ -50,6 +50,11 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp, conversa
     }
   }, [messageId]);
 
+  // Si la version du message ne correspond pas à la version actuelle, ne pas l'afficher
+  if (version && currentVersion && version !== currentVersion) {
+    return null;
+  }
+
   // Navigation entre les versions
   const navigateVersion = async (direction) => {
     if (!onVersionChange || !conversationId) return;
@@ -57,6 +62,7 @@ const Message = ({ type, content, showSpinner, responseTime, timestamp, conversa
     const newVersion = direction === 'next' ? currentVersion + 1 : currentVersion - 1;
     if (newVersion >= 1 && newVersion <= totalVersions) {
       onVersionChange(conversationId, newVersion);
+      setVersionNumber(newVersion);
     }
   };
 

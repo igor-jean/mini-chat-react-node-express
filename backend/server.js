@@ -12,7 +12,7 @@ app.use(express.json());
 // Route POST pour le chat
 app.post('/chat', async (req, res) => {
     try {
-        let { message, conversationId } = req.body;
+        let { message, conversationId, versionNumber } = req.body;
         const now = new Date().toISOString();
 
         // Vérifier si la conversation existe
@@ -24,8 +24,10 @@ app.post('/chat', async (req, res) => {
             conversation = { title: '' };
         }
 
-        // Récupérer les messages existants avec version_number = 1
-        const messages = queries.getMessages.all(conversationId).filter(msg => msg.version_number === 1);
+        console.log(versionNumber);
+
+        // Récupérer les messages existants avec version_number = versionNumber
+        const messages = queries.getMessages.all(conversationId).filter(msg => msg.version_number === versionNumber);
 
         // Définir le titre si c'est le premier message
         if (messages.length === 0 && !conversation.title) {
@@ -34,7 +36,7 @@ app.post('/chat', async (req, res) => {
         }
 
         // Ajouter le message de l'utilisateur
-        const userMessageId = insertNewMessage(conversationId, 'user', message, now);
+        const userMessageId = insertNewMessage(conversationId, 'user', message, now, versionNumber);
 
         // Construire le contexte avec uniquement les messages version 1
         const conversationContext = messages
@@ -65,7 +67,7 @@ app.post('/chat', async (req, res) => {
             .trim();
         
         // Ajouter la réponse à l'historique
-        const assistantMessageId = insertNewMessage(conversationId, 'assistant', cleanResponse, now);
+        const assistantMessageId = insertNewMessage(conversationId, 'assistant', cleanResponse, now, versionNumber);
         
         // Mettre à jour le timestamp de la conversation
         queries.updateConversationTimestamp.run(now, conversationId);

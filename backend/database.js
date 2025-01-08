@@ -94,7 +94,7 @@ const queries = {
 };
 
 // Modification de la fonction d'insertion
-function insertNewMessage(conversationId, role, content, timestamp) {
+function insertNewMessage(conversationId, role, content, timestamp, versionNumber) {
     const lastOrder = db.prepare(`
         SELECT MAX(ordre) as maxOrdre 
         FROM messages 
@@ -107,7 +107,7 @@ function insertNewMessage(conversationId, role, content, timestamp) {
         content, 
         timestamp, 
         lastOrder + 1, // nouvel ordre
-        1 // version initiale
+        versionNumber // version initiale
     ).lastInsertRowid;
 }
 

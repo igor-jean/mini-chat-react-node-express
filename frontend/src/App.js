@@ -19,6 +19,7 @@ function App() {
   const [currentConversationId, setCurrentConversationId] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [currentVersion, setCurrentVersion] = useState(1);
+  const [versionNumber, setVersionNumber] = useState(1);
 
   useEffect(() => {
     fetchConversations();
@@ -52,22 +53,30 @@ function App() {
   //  Charge les messages d'une conversation spécifique
   const loadConversationMessages = async (conversationId) => {
     try {
-      const { data } = await api.get(`/conversation/${conversationId}`);
-      if (data.messages) {
-        const sortedMessages = data.messages.sort((a, b) => a.ordre - b.ordre);
-        setMessages(sortedMessages.map(msg => ({
-          type: msg.role,
-          content: msg.content,
-          timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-          ordre: msg.ordre,
-          messageId: msg.id,
-          totalVersions: msg.totalVersions,
-          currentVersion: msg.totalVersions
-        })));
-        setCurrentVersion(data.messages[0]?.totalVersions || 1);
+      // On récupère la version 1 pour obtenir totalVersions
+      const { data } = await api.get(`/conversation/${conversationId}/version/1`);
+      if (data.messages && data.messages.length > 0) {
+        const latestVersion = data.messages[0].totalVersions;
+        
+        // On charge directement la dernière version
+        const { data: latestData } = await api.get(`/conversation/${conversationId}/version/${latestVersion}`);
+        if (latestData.messages) {
+          const formattedMessages = latestData.messages.map(msg => ({
+            type: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            ordre: msg.ordre,
+            messageId: msg.id,
+            totalVersions: msg.totalVersions,
+            currentVersion: latestVersion
+          }));
+          setMessages(formattedMessages);
+          setCurrentVersion(latestVersion);
+          setVersionNumber(latestVersion);
+        }
       }
     } catch (error) {
       console.error('Erreur lors du chargement des messages:', error);
@@ -91,7 +100,7 @@ function App() {
   };
 
 //  Gère l'envoi d'un message à l'assistant
-  const handleSendMessage = async (message) => {
+  const handleSendMessage = async (message, versionNumber) => {
     setIsLoading(true);
     const startTime = Date.now();
     const timestamp = new Date().toLocaleTimeString('fr-FR', {
@@ -118,7 +127,8 @@ function App() {
     try {
       const { data } = await api.post('/chat', {
         message,
-        conversationId: currentConversationId
+        conversationId: currentConversationId,
+        versionNumber: versionNumber
       });
       
       if (!currentConversationId) {
@@ -285,10 +295,13 @@ function App() {
             onMessageUpdate={handleMessageUpdate}
             currentVersion={currentVersion}
             onVersionChange={handleVersionChange}
+            setVersionNumber={setVersionNumber}
+            versionNumber={versionNumber}
           />
           <MessageInput 
             onSend={handleSendMessage} 
             disabled={isLoading} 
+            versionNumber={versionNumber}
           />
         </div>
       </div>

@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send } from 'lucide-react';
 
-const MessageInput = ({ onSend, disabled }) => {
+const MessageInput = ({ onSend, disabled, versionNumber }) => {
   const [message, setMessage] = useState('');
   const inputRef = useRef(null);
 
@@ -15,7 +15,7 @@ const MessageInput = ({ onSend, disabled }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (message.trim()) {
-      onSend(message);
+      onSend(message, versionNumber);
       setMessage('');
     }
   };
