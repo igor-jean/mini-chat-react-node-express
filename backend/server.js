@@ -74,7 +74,9 @@ app.post('/chat', async (req, res) => {
 
         res.json({ 
             response: cleanResponse,
-            conversationId: conversationId
+            conversationId: conversationId,
+            userMessageId: userMessageId,
+            assistantMessageId: assistantMessageId
         });
     } catch (error) {
         console.error('Erreur:', error);

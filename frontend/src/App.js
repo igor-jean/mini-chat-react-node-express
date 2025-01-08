@@ -92,6 +92,7 @@ function App() {
       if (data.id) {  // Vérification que l'ID est bien retourné
         setCurrentConversationId(data.id);
         setMessages([]);
+        setVersionNumber(1);
         await fetchConversations();
       }
     } catch (error) {
@@ -125,14 +126,23 @@ function App() {
     ]);
 
     try {
-      const { data } = await api.post('/chat', {
-        message,
-        conversationId: currentConversationId,
-        versionNumber: versionNumber
-      });
+      let responseData;
       
       if (!currentConversationId) {
+        const { data } = await api.post('/chat', {
+          message,
+          conversationId: null,
+          versionNumber: 1
+        });
         setCurrentConversationId(data.conversationId);
+        responseData = data;
+      } else {
+        const { data } = await api.post('/chat', {
+          message,
+          conversationId: currentConversationId,
+          versionNumber: versionNumber
+        });
+        responseData = data;
       }
       
       const responseTime = ((Date.now() - startTime) / 1000).toFixed(2);
@@ -143,11 +153,18 @@ function App() {
       
       setMessages(prev => {
         const newMessages = [...prev];
+        // Mettre à jour le message utilisateur avec son ID
+        newMessages[newMessages.length - 2] = {
+          ...newMessages[newMessages.length - 2],
+          messageId: responseData.userMessageId // Ajout de l'ID du message utilisateur
+        };
+        // Mettre à jour le message assistant avec son ID
         newMessages[newMessages.length - 1] = { 
           type: 'assistant', 
-          content: data.response,
+          content: responseData.response,
           responseTime: responseTime,
-          timestamp: responseTimestamp
+          timestamp: responseTimestamp,
+          messageId: responseData.assistantMessageId // Ajout de l'ID du message assistant
         };
         return newMessages;
       });
