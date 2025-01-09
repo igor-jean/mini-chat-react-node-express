@@ -1,4 +1,19 @@
 import Database from 'better-sqlite3';
+import { encoding_for_model } from 'tiktoken';
+
+// Fonction utilitaire pour calculer le nombre de tokens
+function calculateTokens(text) {
+    try {
+        const encoder = encoding_for_model("gpt-3.5-turbo");
+        const tokens = encoder.encode(text);
+        const tokenCount = tokens.length;
+        encoder.free(); // Libérer la mémoire
+        return tokenCount;
+    } catch (error) {
+        console.error('Erreur lors du calcul des tokens:', error);
+        return 0;
+    }
+}
 
 // Initialisation de la base de données
 const db = new Database('chat.db');
@@ -19,6 +34,7 @@ db.exec(`
         timestamp NUMERIC,
         ordre INTEGER DEFAULT 1,
         version_number INTEGER DEFAULT 1,
+        nb_tokens INTEGER DEFAULT 0,
         FOREIGN KEY (conversation_id) REFERENCES conversations(id)
     );
 `);
@@ -27,8 +43,8 @@ db.exec(`
 const queries = {
     insertConversation: db.prepare('INSERT INTO conversations (title, timestamp) VALUES (?, ?)'),
     insertMessage: db.prepare(`
-        INSERT INTO messages (conversation_id, role, content, timestamp, ordre, version_number) 
-        VALUES (?, ?, ?, ?, ?, ?) 
+        INSERT INTO messages (conversation_id, role, content, timestamp, ordre, version_number, nb_tokens) 
+        VALUES (?, ?, ?, ?, ?, ?, ?) 
         RETURNING id
     `),
     getConversation: db.prepare('SELECT * FROM conversations WHERE id = ?'),
@@ -93,7 +109,7 @@ const queries = {
     `),
 };
 
-// Modification de la fonction d'insertion
+// Modification de la fonction d'insertion pour calculer automatiquement les tokens
 function insertNewMessage(conversationId, role, content, timestamp, versionNumber) {
     const lastOrder = db.prepare(`
         SELECT MAX(ordre) as maxOrdre 
@@ -101,13 +117,16 @@ function insertNewMessage(conversationId, role, content, timestamp, versionNumbe
         WHERE conversation_id = ?
     `).get(conversationId).maxOrdre || 0;
     
+    const nbTokens = calculateTokens(content);
+    
     return queries.insertMessage.run(
         conversationId, 
         role, 
         content, 
         timestamp, 
-        lastOrder + 1, // nouvel ordre
-        versionNumber // version initiale
+        lastOrder + 1,
+        versionNumber,
+        nbTokens
     ).lastInsertRowid;
 }
 
@@ -132,4 +151,4 @@ function checkMessageVersions(conversationId, ordre) {
     };
 }
 
-export { db, queries, insertNewMessage, checkMessageVersions };
+export { db, queries, insertNewMessage, checkMessageVersions, calculateTokens };
