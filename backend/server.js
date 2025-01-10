@@ -148,7 +148,7 @@ app.post('/reset/:id', async (req, res) => {
     }
 });
 
-// Modifier la route pour créer une nouvelle conversation
+// route pour créer une nouvelle conversation
 app.post('/conversations', (req, res) => {
     try {
         const now = new Date().toISOString();
@@ -166,7 +166,7 @@ app.post('/conversations', (req, res) => {
     }
 });
 
-// Après les routes existantes, ajoutez la route GET pour les conversations
+// route GET pour les conversations
 app.get('/conversations', (req, res) => {
     try {
         const conversations = queries.getConversations.all();
@@ -180,7 +180,7 @@ app.get('/conversations', (req, res) => {
     }
 });
 
-// Ajouter une route pour récupérer les messages d'une conversation spécifique
+// route pour récupérer les messages d'une conversation spécifique
 app.get('/conversation/:id', (req, res) => {
     try {
         const conversationId = req.params.id;
@@ -218,7 +218,7 @@ app.get('/conversation/:id', (req, res) => {
     }
 });
 
-// Modifier la route de suppression
+// la route de suppression
 app.delete('/conversations/:id', (req, res) => {
     try {
         const conversationId = req.params.id;
@@ -441,35 +441,93 @@ app.get('/versions/:id/messages', (req, res) => {
         const versionId = req.params.id;
         const messages = queries.getMessagesFromVersionGroup.all(versionId);
         
+        // Récupérer l'ID de la conversation pour cette version
+        const conversationId = db.prepare(`
+            SELECT conversation_id FROM versions WHERE id = ?
+        `).get(versionId).conversation_id;
+        
         // Pour chaque message, vérifier s'il s'agit d'un point de divergence
         const messagesWithDivergence = messages.map(msg => {
-            // Vérifier s'il existe d'autres versions avec un contenu différent à cet ordre
-            const otherVersions = db.prepare(`
-                SELECT DISTINCT m2.content
-                FROM messages m2
-                JOIN message_versions mv2 ON mv2.message_id = m2.id
-                JOIN versions v2 ON v2.id = mv2.version_id
-                WHERE v2.conversation_id = (
-                    SELECT conversation_id 
-                    FROM versions 
-                    WHERE id = ?
+            // Récupérer toutes les versions qui partagent le même historique jusqu'à ce message
+            const allVersionsAtThisPoint = db.prepare(`
+                WITH current_version_messages AS (
+                    -- Récupérer les messages de la version actuelle jusqu'à l'ordre actuel
+                    SELECT m.ordre, m.content, m.id as message_id
+                    FROM messages m
+                    JOIN message_versions mv ON mv.message_id = m.id
+                    WHERE mv.version_id = ?
+                    AND m.ordre <= ?
+                    ORDER BY m.ordre ASC
+                ),
+                matching_versions AS (
+                    -- Trouver les versions qui partagent le même historique jusqu'à ordre - 1
+                    SELECT DISTINCT v.id, v.timestamp
+                    FROM versions v
+                    WHERE v.conversation_id = ?
+                    AND EXISTS (
+                        SELECT 1
+                        FROM json_each(v.version_group) je
+                        JOIN messages m ON m.id = je.value
+                        WHERE m.ordre = ?
+                    )
+                    AND NOT EXISTS (
+                        SELECT 1
+                        FROM current_version_messages cvm
+                        WHERE cvm.ordre < ?
+                        AND EXISTS (
+                            SELECT 1
+                            FROM json_each(v.version_group) je
+                            JOIN messages m ON m.id = je.value
+                            WHERE m.ordre = cvm.ordre
+                            AND m.content != cvm.content
+                        )
+                    )
                 )
-                AND m2.ordre = ?
-            `).all(versionId, msg.ordre);
+                SELECT DISTINCT 
+                    mv.version_id,
+                    m.content,
+                    v.timestamp
+                FROM matching_versions v
+                JOIN message_versions mv ON mv.version_id = v.id
+                JOIN messages m ON m.id = mv.message_id
+                WHERE m.ordre = ?
+                ORDER BY v.timestamp ASC
+            `).all(versionId, msg.ordre, conversationId, msg.ordre, msg.ordre, msg.ordre);
 
-            console.log('Divergence check for message:', {
-                messageId: msg.id,
-                ordre: msg.ordre,
-                content: msg.content,
-                otherVersions: otherVersions
+            console.log('Versions found for message at ordre', msg.ordre, ':', allVersionsAtThisPoint);
+
+            // Regrouper les versions par leur contenu
+            const versionGroups = new Map();
+            allVersionsAtThisPoint.forEach(version => {
+                if (!versionGroups.has(version.content)) {
+                    versionGroups.set(version.content, []);
+                }
+                versionGroups.get(version.content).push({
+                    versionId: version.version_id,
+                    timestamp: version.timestamp
+                });
             });
 
-            // Un message est un point de divergence s'il existe au moins un contenu différent
-            const isDivergencePoint = otherVersions.some(v => v.content !== msg.content);
+            // Convertir en format attendu
+            const availableVersions = Array.from(versionGroups.entries()).map(([content, versions]) => ({
+                content,
+                versions
+            }));
+
+            // Un point est divergent s'il y a plus d'un contenu unique
+            const isDivergencePoint = availableVersions.length > 1;
+            
+            console.log('Message analysis:', {
+                ordre: msg.ordre,
+                isDivergencePoint,
+                availableVersionsCount: availableVersions.length,
+                versions: availableVersions
+            });
             
             return {
                 ...msg,
-                isDivergencePoint
+                isDivergencePoint,
+                availableVersions: isDivergencePoint ? availableVersions : []
             };
         });
         

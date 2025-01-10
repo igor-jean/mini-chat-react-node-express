@@ -93,7 +93,7 @@ function App() {
               ordre: msg.ordre,
               messageId: msg.id,
               isDivergencePoint: msg.isDivergencePoint,
-              availableVersions: versionGroups
+              availableVersions: msg.availableVersions || []
             };
             console.log('Formatted message:', formattedMessage);
             return formattedMessage;
@@ -179,7 +179,7 @@ function App() {
             ordre: msg.ordre,
             messageId: msg.id,
             isDivergencePoint: msg.isDivergencePoint,
-            availableVersions: versionGroups
+            availableVersions: msg.availableVersions || []
           };
           console.log('Formatted message:', formattedMessage);
           return formattedMessage;
@@ -300,7 +300,7 @@ function App() {
             ordre: msg.ordre,
             messageId: msg.id,
             isDivergencePoint: msg.isDivergencePoint,
-            availableVersions: versionGroups
+            availableVersions: msg.availableVersions || []
           };
           console.log('Formatted message:', formattedMessage);
           return formattedMessage;
