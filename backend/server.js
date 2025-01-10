@@ -46,6 +46,15 @@ app.post('/chat', async (req, res) => {
         // Modification du format du prompt pour suivre la documentation Llama
         const fullPrompt = buildPrompt(conversationContext, message);
 
+        // Calculer le nombre total de tokens
+        const totalTokens = calculateTokens(fullPrompt);
+        console.log('\n=== Informations de contexte ===');
+        console.log('Nombre total de tokens:', totalTokens);
+        console.log('Contexte complet:');
+        console.log('-------------------');
+        console.log(fullPrompt);
+        console.log('-------------------\n');
+
         // Appel au serveur llama
         const llamaResponse = await fetch('http://localhost:8080/completion', {
             method: 'POST',
@@ -290,10 +299,8 @@ app.put('/messages/:messageId', async (req, res) => {
         // Préparer le nouveau groupe de versions
         let newGroup;
         if (messageIndex === 0) {
-            // Si c'est le premier message, on crée une version avec juste ce message et sa réponse
             newGroup = [newMessageId];
         } else {
-            // Sinon, on garde tous les messages précédents et on ajoute le message modifié
             newGroup = [...currentGroup.slice(0, messageIndex), newMessageId];
         }
 
@@ -307,6 +314,16 @@ app.put('/messages/:messageId', async (req, res) => {
             .join('\n');
 
         const fullPrompt = buildPrompt(conversationContext, content);
+
+        // Ajouter les logs pour le contexte
+        const totalTokens = calculateTokens(fullPrompt);
+        console.log('\n=== Informations de contexte pour la modification du message ===');
+        console.log('Message ID:', messageId);
+        console.log('Nombre total de tokens:', totalTokens);
+        console.log('Contexte complet:');
+        console.log('-------------------');
+        console.log(fullPrompt);
+        console.log('-------------------\n');
 
         // Appel au serveur llama
         const llamaResponse = await fetch('http://localhost:8080/completion', {
@@ -356,7 +373,6 @@ app.put('/messages/:messageId', async (req, res) => {
             assistantResponse: cleanResponse
         });
     } catch (error) {
-        console.error('Erreur:', error);
         res.status(500).json({ 
             error: 'Erreur lors de la modification',
             details: error.message 
@@ -376,7 +392,7 @@ app.get('/messages/:messageId/versions', (req, res) => {
             FROM messages 
             WHERE id = ?
         `).get(messageId);
-        console.log('Message info:', messageInfo);
+        
 
         if (!messageInfo) {
             return res.status(404).json({ 
@@ -387,7 +403,7 @@ app.get('/messages/:messageId/versions', (req, res) => {
         // Utiliser la nouvelle logique de validation des versions
         try {
             const versionsInfo = getMessageVersionsWithValidation(messageInfo.ordre, messageInfo.conversation_id);
-            console.log('Versions info:', versionsInfo);
+            
             
             res.json({
                 messageId,
@@ -494,8 +510,6 @@ app.get('/versions/:id/messages', (req, res) => {
                 ORDER BY v.timestamp ASC
             `).all(versionId, msg.ordre, conversationId, msg.ordre, msg.ordre, msg.ordre);
 
-            console.log('Versions found for message at ordre', msg.ordre, ':', allVersionsAtThisPoint);
-
             // Regrouper les versions par leur contenu
             const versionGroups = new Map();
             allVersionsAtThisPoint.forEach(version => {
@@ -517,12 +531,6 @@ app.get('/versions/:id/messages', (req, res) => {
             // Un point est divergent s'il y a plus d'un contenu unique
             const isDivergencePoint = availableVersions.length > 1;
             
-            console.log('Message analysis:', {
-                ordre: msg.ordre,
-                isDivergencePoint,
-                availableVersionsCount: availableVersions.length,
-                versions: availableVersions
-            });
             
             return {
                 ...msg,
@@ -543,5 +551,5 @@ app.get('/versions/:id/messages', (req, res) => {
 
 // Démarrage du serveur sur le port 3001
 app.listen(3001, () => {
-    console.log('Serveur démarré sur le port 3001');
+    console.log('Serveur en cours d\'exécution sur le port 3001');
 });

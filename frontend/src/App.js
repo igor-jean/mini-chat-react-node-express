@@ -45,14 +45,13 @@ function App() {
         })
       })));
     } catch (error) {
-      console.error('Erreur lors du chargement des conversations:', error);
+      // Erreur silencieuse
     }
   };
 
   //  Charge les messages d'une conversation spécifique
   const loadConversationMessages = async (conversationId) => {
     try {
-      // Récupérer le dernier groupe de versions
       const { data: versionData } = await api.get(`/conversations/${conversationId}/latest-version`);
       if (versionData.versionId) {
         setCurrentVersionId(versionData.versionId);
@@ -62,11 +61,7 @@ function App() {
             let versionGroups = [];
             if (msg.isDivergencePoint) {
               try {
-                // Récupérer les versions disponibles pour ce message
                 const { data: versionsData } = await api.get(`/messages/${msg.id}/versions`);
-                console.log('Version data for message', msg.id, ':', versionsData);
-                
-                // Vérifier et nettoyer les données des versions
                 if (versionsData.versionGroups && Array.isArray(versionsData.versionGroups)) {
                   versionGroups = versionsData.versionGroups.map(group => ({
                     content: group.content || '',
@@ -76,10 +71,7 @@ function App() {
                     })) : []
                   })).filter(group => group.versions.length > 0);
                 }
-                
-                console.log('Version groups after formatting:', versionGroups);
               } catch (error) {
-                console.error('Error fetching versions for message:', msg.id, error);
                 versionGroups = [];
               }
             }
@@ -95,15 +87,13 @@ function App() {
               isDivergencePoint: msg.isDivergencePoint,
               availableVersions: msg.availableVersions || []
             };
-            console.log('Formatted message:', formattedMessage);
             return formattedMessage;
           }));
-          console.log('All formatted messages:', formattedMessages);
           setMessages(formattedMessages);
         }
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des messages:', error);
+      // Erreur silencieuse
     }
   };
 
@@ -113,13 +103,13 @@ function App() {
   const createNewConversation = async () => {
     try {
       const { data } = await api.post('/conversations');
-      if (data.id) {  // Vérification que l'ID est bien retourné
+      if (data.id) {
         setCurrentConversationId(data.id);
         setMessages([]);
         await fetchConversations();
       }
     } catch (error) {
-      console.error('Erreur lors de la création de la conversation:', error);
+      // Erreur silencieuse
     }
   };
 
@@ -141,18 +131,13 @@ function App() {
 
       setCurrentVersionId(data.versionId);
       
-      // Charger les messages du nouveau groupe de versions
       const { data: messagesData } = await api.get(`/versions/${data.versionId}/messages`);
       if (messagesData.messages) {
         const formattedMessages = await Promise.all(messagesData.messages.map(async msg => {
           let versionGroups = [];
           if (msg.isDivergencePoint) {
             try {
-              // Récupérer les versions disponibles pour ce message
               const { data: versionsData } = await api.get(`/messages/${msg.id}/versions`);
-              console.log('Version data for message', msg.id, ':', versionsData);
-              
-              // Vérifier et nettoyer les données des versions
               if (versionsData.versionGroups && Array.isArray(versionsData.versionGroups)) {
                 versionGroups = versionsData.versionGroups.map(group => ({
                   content: group.content || '',
@@ -162,10 +147,7 @@ function App() {
                   })) : []
                 })).filter(group => group.versions.length > 0);
               }
-              
-              console.log('Version groups after formatting:', versionGroups);
             } catch (error) {
-              console.error('Error fetching versions for message:', msg.id, error);
               versionGroups = [];
             }
           }
@@ -181,10 +163,8 @@ function App() {
             isDivergencePoint: msg.isDivergencePoint,
             availableVersions: msg.availableVersions || []
           };
-          console.log('Formatted message:', formattedMessage);
           return formattedMessage;
         }));
-        console.log('All formatted messages:', formattedMessages);
         setMessages(formattedMessages);
       }
 
@@ -194,7 +174,6 @@ function App() {
 
       await fetchConversations();
     } catch (error) {
-      console.error('Erreur:', error);
       const errorTimestamp = new Date().toLocaleTimeString('fr-FR', {
         hour: '2-digit',
         minute: '2-digit',
@@ -226,7 +205,7 @@ function App() {
       }
       await fetchConversations();
     } catch (error) {
-      console.error('Erreur lors de la suppression:', error);
+      // Erreur silencieuse
     }
   };
 
@@ -238,7 +217,6 @@ function App() {
 
       setCurrentVersionId(data.versionId);
       
-      // Charger les messages du nouveau groupe de versions
       const { data: messagesData } = await api.get(`/versions/${data.versionId}/messages`);
       if (messagesData.messages) {
         const formattedMessages = messagesData.messages.map(msg => ({
@@ -256,7 +234,7 @@ function App() {
         setMessages(formattedMessages);
       }
     } catch (error) {
-      console.error('Erreur lors de la modification:', error);
+      // Erreur silencieuse
     }
   };
 
@@ -269,11 +247,7 @@ function App() {
           let versionGroups = [];
           if (msg.isDivergencePoint) {
             try {
-              // Récupérer les versions disponibles pour ce message
               const { data: versionsData } = await api.get(`/messages/${msg.id}/versions`);
-              console.log('Version data for message', msg.id, ':', versionsData);
-              
-              // Vérifier et nettoyer les données des versions
               if (versionsData.versionGroups && Array.isArray(versionsData.versionGroups)) {
                 versionGroups = versionsData.versionGroups.map(group => ({
                   content: group.content || '',
@@ -283,10 +257,7 @@ function App() {
                   })) : []
                 })).filter(group => group.versions.length > 0);
               }
-              
-              console.log('Version groups after formatting:', versionGroups);
             } catch (error) {
-              console.error('Error fetching versions for message:', msg.id, error);
               versionGroups = [];
             }
           }
@@ -302,14 +273,12 @@ function App() {
             isDivergencePoint: msg.isDivergencePoint,
             availableVersions: msg.availableVersions || []
           };
-          console.log('Formatted message:', formattedMessage);
           return formattedMessage;
         }));
-        console.log('All formatted messages:', formattedMessages);
         setMessages(formattedMessages);
       }
     } catch (error) {
-      console.error('Erreur lors du changement de version:', error);
+      // Erreur silencieuse
     }
   };
 

@@ -7,10 +7,9 @@ function calculateTokens(text) {
         const encoder = encoding_for_model("gpt-3.5-turbo");
         const tokens = encoder.encode(text);
         const tokenCount = tokens.length;
-        encoder.free(); // Libérer la mémoire
+        encoder.free();
         return tokenCount;
     } catch (error) {
-        console.error('Erreur lors du calcul des tokens:', error);
         return 0;
     }
 }
@@ -217,19 +216,13 @@ function findDivergencePoint(messages1, messages2) {
 // Fonction pour obtenir les versions valides pour un message
 function getValidVersionsForMessage(ordre, conversationId) {
     try {
-        console.log('Getting versions for message:', { ordre, conversationId });
-        
-        // Récupérer toutes les versions de la conversation
         const allVersions = db.prepare(`
             SELECT DISTINCT v.id, v.timestamp
             FROM versions v
             WHERE v.conversation_id = ?
             ORDER BY v.timestamp ASC
         `).all(conversationId);
-        
-        console.log('All versions found:', allVersions);
 
-        // Pour chaque version, récupérer ses messages jusqu'à l'ordre spécifié
         const versionsWithMessages = allVersions.map(version => {
             try {
                 const messages = db.prepare(`
@@ -241,40 +234,22 @@ function getValidVersionsForMessage(ordre, conversationId) {
                 `).all(version.id, ordre);
                 return { ...version, messages };
             } catch (error) {
-                console.error('Error getting messages for version:', version.id, error);
                 return { ...version, messages: [] };
             }
         });
-        
-        console.log('Versions with messages:', versionsWithMessages.map(v => ({
-            versionId: v.id,
-            messageCount: v.messages.length,
-            messages: v.messages
-        })));
 
-        // Regrouper les versions par leur contenu au point spécifié
         const versionGroups = new Map();
         const invalidVersions = new Set();
 
         versionsWithMessages.forEach((version1) => {
             if (invalidVersions.has(version1.id)) return;
 
-            // Vérifier si cette version a déjà divergé d'une version précédente
             for (const version2 of versionsWithMessages) {
                 if (version1.id === version2.id) continue;
                 
                 const divergencePoint = findDivergencePoint(version1.messages, version2.messages);
-                console.log('Divergence check:', {
-                    version1Id: version1.id,
-                    version2Id: version2.id,
-                    divergencePoint,
-                    ordre,
-                    version1Messages: version1.messages,
-                    version2Messages: version2.messages
-                });
                 
                 if (divergencePoint < ordre - 1) {
-                    console.log('Version invalidated:', version1.id);
                     invalidVersions.add(version1.id);
                     break;
                 }
@@ -291,18 +266,14 @@ function getValidVersionsForMessage(ordre, conversationId) {
             }
         });
 
-        const result = Array.from(versionGroups.values()).map(versions => ({
+        return Array.from(versionGroups.values()).map(versions => ({
             content: versions[0].messages[ordre - 1].content,
             versions: versions.map(v => ({
                 versionId: v.id,
                 timestamp: v.timestamp
             }))
         }));
-
-        console.log('Final version groups:', result);
-        return result;
     } catch (error) {
-        console.error('Error in getValidVersionsForMessage:', error);
         throw error;
     }
 }
@@ -319,15 +290,11 @@ queries.getMessageVersions = db.prepare(`
 
 // Fonction pour obtenir les versions d'un message avec la nouvelle logique
 function getMessageVersionsWithValidation(ordre, conversationId) {
-    console.log('Getting versions for message at order:', ordre, 'in conversation:', conversationId);
     const validVersionGroups = getValidVersionsForMessage(ordre, conversationId);
-    console.log('Valid version groups:', validVersionGroups);
-    const result = {
+    return {
         totalGroups: validVersionGroups.length,
         versionGroups: validVersionGroups
     };
-    console.log('Final result:', result);
-    return result;
 }
 
 export { db, queries, insertNewMessage, createNewVersionGroup, updateVersionGroup, calculateTokens, getMessageVersionsWithValidation };

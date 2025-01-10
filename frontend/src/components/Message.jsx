@@ -128,33 +128,14 @@ const Message = ({
           {/* Contrôles de version - uniquement pour les points de divergence */}
           {type === 'user' && isDivergencePoint && availableVersions && availableVersions.length > 1 && (
             <div className="flex items-center gap-2 mt-2 bg-accent/10 px-2 py-1 rounded-md">
-              {console.log('Message props:', {
-                type,
-                isDivergencePoint,
-                availableVersions,
-                currentVersionId
-              })}
-              {console.log('Available versions structure:', availableVersions.map(v => ({
-                content: v.content,
-                versionIds: v.versions?.map(ver => ver.versionId)
-              })))}
               <button
                 onClick={() => {
                   const currentGroupIndex = availableVersions.findIndex(
                     group => group && group.versions && Array.isArray(group.versions) && 
                     group.versions.some(v => v && v.versionId === parseInt(currentVersionId))
                   );
-                  console.log('Navigation info:', {
-                    currentVersionId,
-                    currentGroupIndex,
-                    availableVersions: availableVersions.map(v => ({
-                      content: v.content,
-                      versionIds: v.versions?.map(ver => ver.versionId)
-                    }))
-                  });
                   if (currentGroupIndex > 0 && availableVersions[currentGroupIndex - 1]?.versions?.[0]?.versionId) {
                     const nextVersionId = availableVersions[currentGroupIndex - 1].versions[0].versionId;
-                    console.log('Switching to version:', nextVersionId);
                     onVersionChange(messageId, nextVersionId);
                   }
                 }}
@@ -174,11 +155,6 @@ const Message = ({
                     group => group && group.versions && Array.isArray(group.versions) && 
                     group.versions.some(v => v && v.versionId === parseInt(currentVersionId))
                   );
-                  console.log('Display info:', {
-                    currentVersionId,
-                    currentGroupIndex,
-                    totalGroups: availableVersions.length
-                  });
                   return currentGroupIndex >= 0 ? `${currentGroupIndex + 1}/${availableVersions.length}` : '-';
                 })()}
               </div>
