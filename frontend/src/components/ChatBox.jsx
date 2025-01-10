@@ -5,8 +5,18 @@ import ClipLoader from 'react-spinners/ClipLoader';
 // Composant ChatBox qui affiche la liste des messages et gère le défilement automatique
 // props:
 //   - messages: tableau des messages à afficher
+//   - currentConversationId: ID de la conversation actuelle
+//   - onMessageUpdate: fonction pour mettre à jour un message
+//   - currentVersionId: ID de la version actuellement affichée
+//   - onVersionChange: fonction pour changer de version
 
-const ChatBox = ({ messages, currentConversationId, onMessageUpdate, currentVersion, onVersionChange, setVersionNumber }) => {
+const ChatBox = ({ 
+  messages, 
+  currentConversationId, 
+  onMessageUpdate, 
+  currentVersionId,
+  onVersionChange 
+}) => {
   // Référence vers le dernier élément pour gérer le défilement
   const messagesEndRef = useRef(null);
 
@@ -34,10 +44,10 @@ const ChatBox = ({ messages, currentConversationId, onMessageUpdate, currentVers
           ordre={message.ordre}
           messageId={message.messageId}
           onMessageUpdate={onMessageUpdate}
-          totalVersions={message.totalVersions}
-          currentVersion={currentVersion}
+          isDivergencePoint={message.isDivergencePoint}
+          availableVersions={message.availableVersions || []}
+          currentVersionId={currentVersionId}
           onVersionChange={onVersionChange}
-          setVersionNumber={setVersionNumber}
         />
       ))}
       <div ref={messagesEndRef} />

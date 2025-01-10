@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
-import { db, queries, insertNewMessage, checkMessageVersions } from './database.js';
+import { db, queries, insertNewMessage, calculateTokens, createNewVersionGroup } from './database.js';
 import { LLAMA_PARAMS, buildPrompt } from './llamaConfig.js';
 
 // Configuration de base du serveur Express
@@ -12,7 +12,7 @@ app.use(express.json());
 // Route POST pour le chat
 app.post('/chat', async (req, res) => {
     try {
-        let { message, conversationId, versionNumber } = req.body;
+        let { message, conversationId, versionId } = req.body;
         const now = new Date().toISOString();
 
         // Vérifier si la conversation existe
@@ -24,24 +24,24 @@ app.post('/chat', async (req, res) => {
             conversation = { title: '' };
         }
 
-        console.log(versionNumber);
-
-        // Récupérer les messages existants avec version_number = versionNumber
-        const messages = queries.getMessages.all(conversationId).filter(msg => msg.version_number === versionNumber);
-
         // Définir le titre si c'est le premier message
-        if (messages.length === 0 && !conversation.title) {
+        if (!conversation.title) {
             const title = message.length > 25 ? message.substring(0, 25) + '...' : message;
             queries.updateConversationTitle.run(title, conversationId);
         }
 
         // Ajouter le message de l'utilisateur
-        const userMessageId = insertNewMessage(conversationId, 'user', message, now, versionNumber);
+        const userMessageId = insertNewMessage(conversationId, 'user', message, now);
 
-        // Construire le contexte avec uniquement les messages version 1
-        const conversationContext = messages
-            .map(msg => `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`)
-            .join('\n');
+        // Construire le contexte pour l'assistant
+        let conversationContext = '';
+        if (versionId) {
+            // Si un groupe de versions est spécifié, utiliser ses messages
+            const messages = queries.getMessagesFromVersionGroup.all(versionId);
+            conversationContext = messages
+                .map(msg => `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`)
+                .join('\n');
+        }
         
         // Modification du format du prompt pour suivre la documentation Llama
         const fullPrompt = buildPrompt(conversationContext, message);
@@ -67,16 +67,20 @@ app.post('/chat', async (req, res) => {
             .trim();
         
         // Ajouter la réponse à l'historique
-        const assistantMessageId = insertNewMessage(conversationId, 'assistant', cleanResponse, now, versionNumber);
+        const assistantMessageId = insertNewMessage(conversationId, 'assistant', cleanResponse, now);
         
         // Mettre à jour le timestamp de la conversation
         queries.updateConversationTimestamp.run(now, conversationId);
+
+        // Récupérer le dernier groupe de versions (qui inclut la réponse)
+        const finalVersion = queries.getLatestVersionGroup.get(conversationId);
 
         res.json({ 
             response: cleanResponse,
             conversationId: conversationId,
             userMessageId: userMessageId,
-            assistantMessageId: assistantMessageId
+            assistantMessageId: assistantMessageId,
+            versionId: finalVersion.id
         });
     } catch (error) {
         console.error('Erreur:', error);
@@ -194,9 +198,16 @@ app.delete('/conversations/:id', (req, res) => {
     try {
         const conversationId = req.params.id;
         
-        // Supprimer les messages d'abord (à cause de la clé étrangère)
+        // Supprimer d'abord les associations message-version
+        queries.deleteMessageVersions.run(conversationId);
+        
+        // Puis supprimer les versions
+        queries.deleteVersions.run(conversationId);
+        
+        // Ensuite supprimer les messages
         queries.deleteMessages.run(conversationId);
-        // Puis supprimer la conversation
+        
+        // Enfin supprimer la conversation
         queries.deleteConversation.run(conversationId);
         
         res.json({ message: 'Conversation supprimée avec succès' });
@@ -218,28 +229,53 @@ app.put('/messages/:messageId', async (req, res) => {
 
         // Récupérer les informations du message original
         const originalMessage = db.prepare(`
-            SELECT conversation_id, ordre
+            SELECT conversation_id, ordre, role
             FROM messages 
             WHERE id = ?
         `).get(messageId);
 
-        // Récupérer la dernière version
-        const lastVersion = queries.getLastVersionNumber.get(
-            originalMessage.conversation_id, 
-            originalMessage.ordre
-        );
-        const newVersionNumber = (lastVersion?.version_number || 0) + 1;
+        if (!originalMessage) {
+            return res.status(404).json({ error: 'Message non trouvé' });
+        }
 
-        // Insérer la nouvelle version du message utilisateur
-        queries.insertMessageVersion.run(
+        // Récupérer le groupe de versions actuel
+        const currentVersion = queries.getLatestVersionGroup.get(originalMessage.conversation_id);
+        if (!currentVersion) {
+            return res.status(404).json({ error: 'Groupe de versions non trouvé' });
+        }
+
+        const currentGroup = JSON.parse(currentVersion.version_group);
+        const messageIndex = currentGroup.indexOf(parseInt(messageId));
+
+        if (messageIndex === -1) {
+            return res.status(404).json({ error: 'Message non trouvé dans le groupe de versions' });
+        }
+
+        // Créer le nouveau message modifié
+        const nbTokens = calculateTokens(content);
+        const newMessageId = queries.insertMessage.run(
+            originalMessage.conversation_id,
+            originalMessage.role,
             content,
-            newVersionNumber,
-            messageId
-        );
-        
+            now,
+            originalMessage.ordre,
+            nbTokens
+        ).lastInsertRowid;
+
+        // Préparer le nouveau groupe de versions
+        let newGroup;
+        if (messageIndex === 0) {
+            // Si c'est le premier message, on crée une version avec juste ce message et sa réponse
+            newGroup = [newMessageId];
+        } else {
+            // Sinon, on garde tous les messages précédents et on ajoute le message modifié
+            newGroup = [...currentGroup.slice(0, messageIndex), newMessageId];
+        }
+
         // Construire le contexte pour l'assistant
-        const messages = queries.getMessages.all(originalMessage.conversation_id)
-            .filter(msg => msg.version_number === newVersionNumber);
+        const messages = newGroup.map(id => {
+            return db.prepare('SELECT role, content FROM messages WHERE id = ?').get(id);
+        });
 
         const conversationContext = messages
             .map(msg => `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`)
@@ -265,19 +301,32 @@ app.put('/messages/:messageId', async (req, res) => {
             .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '')
             .trim();
 
-        // Insérer la réponse de l'assistant avec la même version
-        queries.insertMessage.run(
+        // Créer la nouvelle réponse de l'assistant
+        const assistantNbTokens = calculateTokens(cleanResponse);
+        const assistantMessageId = queries.insertMessage.run(
             originalMessage.conversation_id,
             'assistant',
             cleanResponse,
             now,
             originalMessage.ordre + 1,
-            newVersionNumber
-        );
+            assistantNbTokens
+        ).lastInsertRowid;
+
+        // Ajouter la réponse au groupe
+        newGroup.push(assistantMessageId);
+
+        // Si le message modifié n'était pas le dernier, ajouter les messages suivants
+        if (messageIndex + 2 < currentGroup.length) {
+            newGroup.push(...currentGroup.slice(messageIndex + 2));
+        }
+
+        // Créer la version finale avec tous les messages
+        const finalVersionId = createNewVersionGroup(originalMessage.conversation_id, newGroup);
 
         res.json({ 
-            messageId, 
-            versionNumber: newVersionNumber,
+            messageId: newMessageId,
+            assistantMessageId,
+            versionId: finalVersionId,
             timestamp: now,
             assistantResponse: cleanResponse
         });
@@ -308,18 +357,19 @@ app.get('/messages/:messageId/versions', (req, res) => {
             });
         }
 
-        // Utiliser la nouvelle fonction checkMessageVersions
-        const versionsInfo = checkMessageVersions(messageInfo.conversation_id, messageInfo.ordre);
+        // Récupérer les versions disponibles
+        const versions = queries.getMessageVersions.all(messageInfo.ordre, messageInfo.conversation_id);
         
         res.json({
             messageId,
-            hasMultipleVersions: versionsInfo.hasMultipleVersions,
-            versionsCount: versionsInfo.count,
-            versions: versionsInfo.versions
+            versions: versions.map(v => ({
+                versionId: v.version_id,
+                timestamp: v.timestamp,
+                content: v.content
+            }))
         });
-
     } catch (error) {
-        console.error('Erreur lors de la récupération des versions:', error);
+        console.error('Erreur:', error);
         res.status(500).json({ 
             error: 'Erreur lors de la récupération des versions',
             details: error.message 
@@ -327,99 +377,69 @@ app.get('/messages/:messageId/versions', (req, res) => {
     }
 });
 
-// Route pour récupérer une version spécifique
-app.get('/messages/:messageId/versions/:versionNumber', (req, res) => {
+// Route pour récupérer le dernier groupe de versions d'une conversation
+app.get('/conversations/:id/latest-version', (req, res) => {
     try {
-        const { messageId, versionNumber } = req.params;
+        const conversationId = req.params.id;
+        const latestVersion = queries.getLatestVersionGroup.get(conversationId);
         
-        const version = queries.getMessageVersion.get(messageId, versionNumber);
-
-        if (!version) {
-            return res.status(404).json({ 
-                error: 'Version non trouvée' 
-            });
+        if (!latestVersion) {
+            return res.status(404).json({ error: 'Aucun groupe de versions trouvé' });
         }
-
-        res.json(version);
-    } catch (error) {
-        console.error('Erreur lors de la récupération de la version:', error);
-        res.status(500).json({ 
-            error: 'Erreur lors de la récupération de la version',
-            details: error.message 
-        });
-    }
-});
-
-// Route pour créer une nouvelle version d'un message
-app.post('/messages/version', async (req, res) => {
-    try {
-        const { conversation_id, ordre, content } = req.body;
-
-        // Utiliser la requête préparée existante au lieu d'en créer une nouvelle
-        const lastVersion = queries.getLastVersionNumber.get(conversation_id, ordre);
-
-        const newVersionNumber = (lastVersion?.version_number || 0) + 1;
-
-        // Insérer la nouvelle version du message
-        const result = queries.insertMessage.run(
-            conversation_id,
-            'user',
-            content,
-            new Date().toISOString(),
-            ordre,
-            newVersionNumber
-        );
 
         res.json({ 
-            id: result.lastInsertRowid,
-            version_number: newVersionNumber,
-            ordre: ordre
-        });
-
-    } catch (error) {
-        console.error('Erreur lors de la création de la nouvelle version:', error);
-        res.status(500).json({ 
-            error: 'Erreur lors de la création de la nouvelle version',
-            details: error.message 
-        });
-    }
-});
-
-// Route pour charger une version spécifique de la conversation
-app.get('/conversation/:id/version/:versionNumber', (req, res) => {
-    try {
-        const { id: conversationId, versionNumber } = req.params;
-        const conversation = queries.getConversation.get(conversationId);
-        
-        if (!conversation) {
-            return res.status(404).json({ error: 'Conversation non trouvée' });
-        }
-
-        // Récupérer tous les messages de cette version
-        const messages = queries.getMessagesForVersion.all(conversationId, versionNumber);
-
-        const messagesWithVersionInfo = messages.map(msg => {
-            const versionsInfo = checkMessageVersions(conversationId, msg.ordre);
-            return {
-                role: msg.role,
-                content: msg.content,
-                timestamp: msg.timestamp,
-                ordre: msg.ordre,
-                id: msg.id,
-                totalVersions: versionsInfo.count,
-                currentVersion: parseInt(versionNumber)
-            };
-        });
-
-        res.json({
-            id: conversationId,
-            title: conversation.title,
-            messages: messagesWithVersionInfo,
-            currentVersion: parseInt(versionNumber)
+            versionId: latestVersion.id,
+            timestamp: latestVersion.timestamp
         });
     } catch (error) {
         console.error('Erreur:', error);
-        res.status(500).json({ error: 'Erreur lors de la récupération' });
+        res.status(500).json({ 
+            error: 'Erreur lors de la récupération du groupe de versions',
+            details: error.message 
+        });
+    }
+});
+
+// Route pour récupérer les messages d'un groupe de versions
+app.get('/versions/:id/messages', (req, res) => {
+    try {
+        const versionId = req.params.id;
+        const messages = queries.getMessagesFromVersionGroup.all(versionId);
+        
+        // Pour chaque message, récupérer les versions disponibles et identifier les points de divergence
+        const messagesWithVersions = messages.map(msg => {
+            const versions = queries.getMessageVersions.all(msg.ordre, msg.conversation_id);
+            
+            // Un message est un point de divergence seulement s'il a été modifié
+            // et que ses versions ont des contenus différents
+            const isDivergencePoint = versions.length > 1 && versions.some(v => v.content !== msg.content);
+            
+            // Pour chaque version, récupérer les messages qui suivent
+            const versionsWithContext = versions.map(v => {
+                const versionMessages = queries.getMessagesFromVersionGroup.all(v.version_id);
+                const startIndex = versionMessages.findIndex(m => m.ordre === msg.ordre);
+                return {
+                    versionId: v.version_id,
+                    timestamp: v.timestamp,
+                    // Inclure les messages qui suivent dans cette version
+                    subsequentMessages: versionMessages.slice(startIndex)
+                };
+            });
+
+            return {
+                ...msg,
+                isDivergencePoint,
+                availableVersions: isDivergencePoint ? versionsWithContext : []
+            };
+        });
+
+        res.json({ messages: messagesWithVersions });
+    } catch (error) {
+        console.error('Erreur:', error);
+        res.status(500).json({ 
+            error: 'Erreur lors de la récupération des messages',
+            details: error.message 
+        });
     }
 });
 
