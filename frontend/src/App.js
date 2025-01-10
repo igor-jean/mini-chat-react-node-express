@@ -58,18 +58,47 @@ function App() {
         setCurrentVersionId(versionData.versionId);
         const { data: messagesData } = await api.get(`/versions/${versionData.versionId}/messages`);
         if (messagesData.messages) {
-          const formattedMessages = messagesData.messages.map(msg => ({
-            type: msg.role,
-            content: msg.content,
-            timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }),
-            ordre: msg.ordre,
-            messageId: msg.id,
-            isDivergencePoint: msg.isDivergencePoint,
-            availableVersions: msg.availableVersions || []
+          const formattedMessages = await Promise.all(messagesData.messages.map(async msg => {
+            let versionGroups = [];
+            if (msg.isDivergencePoint) {
+              try {
+                // Récupérer les versions disponibles pour ce message
+                const { data: versionsData } = await api.get(`/messages/${msg.id}/versions`);
+                console.log('Version data for message', msg.id, ':', versionsData);
+                
+                // Vérifier et nettoyer les données des versions
+                if (versionsData.versionGroups && Array.isArray(versionsData.versionGroups)) {
+                  versionGroups = versionsData.versionGroups.map(group => ({
+                    content: group.content || '',
+                    versions: Array.isArray(group.versions) ? group.versions.map(v => ({
+                      versionId: v.versionId,
+                      timestamp: v.timestamp
+                    })) : []
+                  })).filter(group => group.versions.length > 0);
+                }
+                
+                console.log('Version groups after formatting:', versionGroups);
+              } catch (error) {
+                console.error('Error fetching versions for message:', msg.id, error);
+                versionGroups = [];
+              }
+            }
+            const formattedMessage = {
+              type: msg.role,
+              content: msg.content,
+              timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+              ordre: msg.ordre,
+              messageId: msg.id,
+              isDivergencePoint: msg.isDivergencePoint,
+              availableVersions: versionGroups
+            };
+            console.log('Formatted message:', formattedMessage);
+            return formattedMessage;
           }));
+          console.log('All formatted messages:', formattedMessages);
           setMessages(formattedMessages);
         }
       }
@@ -102,23 +131,6 @@ function App() {
       hour: '2-digit',
       minute: '2-digit',
     });
-    
-    setMessages(prev => [...prev, 
-      { 
-        type: 'user', 
-        content: message, 
-        timestamp,
-        isDivergencePoint: false,
-        availableVersions: []
-      },
-      { 
-        type: 'assistant', 
-        content: 'En train de réfléchir...',
-        timestamp,
-        isDivergencePoint: false,
-        availableVersions: []
-      }
-    ]);
 
     try {
       const { data } = await api.post('/chat', {
@@ -129,31 +141,52 @@ function App() {
 
       setCurrentVersionId(data.versionId);
       
-      const responseTime = ((Date.now() - startTime) / 1000).toFixed(2);
-      const responseTimestamp = new Date().toLocaleTimeString('fr-FR', {
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      
-      setMessages(prev => {
-        const newMessages = [...prev];
-        newMessages[newMessages.length - 2] = {
-          ...newMessages[newMessages.length - 2],
-          messageId: data.userMessageId,
-          isDivergencePoint: false,
-          availableVersions: []
-        };
-        newMessages[newMessages.length - 1] = { 
-          type: 'assistant', 
-          content: data.response,
-          responseTime: responseTime,
-          timestamp: responseTimestamp,
-          messageId: data.assistantMessageId,
-          isDivergencePoint: false,
-          availableVersions: []
-        };
-        return newMessages;
-      });
+      // Charger les messages du nouveau groupe de versions
+      const { data: messagesData } = await api.get(`/versions/${data.versionId}/messages`);
+      if (messagesData.messages) {
+        const formattedMessages = await Promise.all(messagesData.messages.map(async msg => {
+          let versionGroups = [];
+          if (msg.isDivergencePoint) {
+            try {
+              // Récupérer les versions disponibles pour ce message
+              const { data: versionsData } = await api.get(`/messages/${msg.id}/versions`);
+              console.log('Version data for message', msg.id, ':', versionsData);
+              
+              // Vérifier et nettoyer les données des versions
+              if (versionsData.versionGroups && Array.isArray(versionsData.versionGroups)) {
+                versionGroups = versionsData.versionGroups.map(group => ({
+                  content: group.content || '',
+                  versions: Array.isArray(group.versions) ? group.versions.map(v => ({
+                    versionId: v.versionId,
+                    timestamp: v.timestamp
+                  })) : []
+                })).filter(group => group.versions.length > 0);
+              }
+              
+              console.log('Version groups after formatting:', versionGroups);
+            } catch (error) {
+              console.error('Error fetching versions for message:', msg.id, error);
+              versionGroups = [];
+            }
+          }
+          const formattedMessage = {
+            type: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            ordre: msg.ordre,
+            messageId: msg.id,
+            isDivergencePoint: msg.isDivergencePoint,
+            availableVersions: versionGroups
+          };
+          console.log('Formatted message:', formattedMessage);
+          return formattedMessage;
+        }));
+        console.log('All formatted messages:', formattedMessages);
+        setMessages(formattedMessages);
+      }
 
       if (!currentConversationId) {
         setCurrentConversationId(data.conversationId);
@@ -232,18 +265,47 @@ function App() {
       setCurrentVersionId(versionId);
       const { data: messagesData } = await api.get(`/versions/${versionId}/messages`);
       if (messagesData.messages) {
-        const formattedMessages = messagesData.messages.map(msg => ({
-          type: msg.role,
-          content: msg.content,
-          timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-          ordre: msg.ordre,
-          messageId: msg.id,
-          isDivergencePoint: msg.isDivergencePoint,
-          availableVersions: msg.availableVersions || []
+        const formattedMessages = await Promise.all(messagesData.messages.map(async msg => {
+          let versionGroups = [];
+          if (msg.isDivergencePoint) {
+            try {
+              // Récupérer les versions disponibles pour ce message
+              const { data: versionsData } = await api.get(`/messages/${msg.id}/versions`);
+              console.log('Version data for message', msg.id, ':', versionsData);
+              
+              // Vérifier et nettoyer les données des versions
+              if (versionsData.versionGroups && Array.isArray(versionsData.versionGroups)) {
+                versionGroups = versionsData.versionGroups.map(group => ({
+                  content: group.content || '',
+                  versions: Array.isArray(group.versions) ? group.versions.map(v => ({
+                    versionId: v.versionId,
+                    timestamp: v.timestamp
+                  })) : []
+                })).filter(group => group.versions.length > 0);
+              }
+              
+              console.log('Version groups after formatting:', versionGroups);
+            } catch (error) {
+              console.error('Error fetching versions for message:', msg.id, error);
+              versionGroups = [];
+            }
+          }
+          const formattedMessage = {
+            type: msg.role,
+            content: msg.content,
+            timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            ordre: msg.ordre,
+            messageId: msg.id,
+            isDivergencePoint: msg.isDivergencePoint,
+            availableVersions: versionGroups
+          };
+          console.log('Formatted message:', formattedMessage);
+          return formattedMessage;
         }));
+        console.log('All formatted messages:', formattedMessages);
         setMessages(formattedMessages);
       }
     } catch (error) {

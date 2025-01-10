@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
-import { db, queries, insertNewMessage, calculateTokens, createNewVersionGroup } from './database.js';
+import { db, queries, insertNewMessage, calculateTokens, createNewVersionGroup, updateVersionGroup, getMessageVersionsWithValidation } from './database.js';
 import { LLAMA_PARAMS, buildPrompt } from './llamaConfig.js';
 
 // Configuration de base du serveur Express
@@ -68,19 +68,44 @@ app.post('/chat', async (req, res) => {
         
         // Ajouter la réponse à l'historique
         const assistantMessageId = insertNewMessage(conversationId, 'assistant', cleanResponse, now);
+
+        // Créer ou mettre à jour le groupe de versions
+        let finalVersionId;
+        if (versionId) {
+            // Récupérer le groupe de versions actuel
+            const currentVersion = queries.getVersionGroup.get(versionId);
+            if (currentVersion) {
+                // Récupérer les messages existants
+                const currentGroup = JSON.parse(currentVersion.version_group);
+                // Ajouter les nouveaux messages au groupe
+                currentGroup.push(userMessageId, assistantMessageId);
+                // Mettre à jour le groupe de versions
+                finalVersionId = updateVersionGroup(versionId, currentGroup);
+            } else {
+                // Si la version n'existe pas, créer une nouvelle version
+                finalVersionId = createNewVersionGroup(conversationId, [userMessageId, assistantMessageId]);
+            }
+        } else {
+            // Vérifier s'il existe déjà une version pour cette conversation
+            const latestVersion = queries.getLatestVersionGroup.get(conversationId);
+            if (latestVersion) {
+                // Si une version existe, créer une nouvelle branche
+                finalVersionId = createNewVersionGroup(conversationId, [userMessageId, assistantMessageId]);
+            } else {
+                // Si c'est la première version de la conversation
+                finalVersionId = createNewVersionGroup(conversationId, [userMessageId, assistantMessageId]);
+            }
+        }
         
         // Mettre à jour le timestamp de la conversation
         queries.updateConversationTimestamp.run(now, conversationId);
-
-        // Récupérer le dernier groupe de versions (qui inclut la réponse)
-        const finalVersion = queries.getLatestVersionGroup.get(conversationId);
 
         res.json({ 
             response: cleanResponse,
             conversationId: conversationId,
             userMessageId: userMessageId,
             assistantMessageId: assistantMessageId,
-            versionId: finalVersion.id
+            versionId: finalVersionId
         });
     } catch (error) {
         console.error('Erreur:', error);
@@ -343,6 +368,7 @@ app.put('/messages/:messageId', async (req, res) => {
 app.get('/messages/:messageId/versions', (req, res) => {
     try {
         const { messageId } = req.params;
+        console.log('Fetching versions for message:', messageId);
         
         // D'abord, récupérer les informations du message
         const messageInfo = db.prepare(`
@@ -350,6 +376,7 @@ app.get('/messages/:messageId/versions', (req, res) => {
             FROM messages 
             WHERE id = ?
         `).get(messageId);
+        console.log('Message info:', messageInfo);
 
         if (!messageInfo) {
             return res.status(404).json({ 
@@ -357,22 +384,30 @@ app.get('/messages/:messageId/versions', (req, res) => {
             });
         }
 
-        // Récupérer les versions disponibles
-        const versions = queries.getMessageVersions.all(messageInfo.ordre, messageInfo.conversation_id);
-        
-        res.json({
-            messageId,
-            versions: versions.map(v => ({
-                versionId: v.version_id,
-                timestamp: v.timestamp,
-                content: v.content
-            }))
-        });
+        // Utiliser la nouvelle logique de validation des versions
+        try {
+            const versionsInfo = getMessageVersionsWithValidation(messageInfo.ordre, messageInfo.conversation_id);
+            console.log('Versions info:', versionsInfo);
+            
+            res.json({
+                messageId,
+                totalGroups: versionsInfo.totalGroups,
+                versionGroups: versionsInfo.versionGroups
+            });
+        } catch (error) {
+            console.error('Error in getMessageVersionsWithValidation:', error);
+            res.status(500).json({ 
+                error: 'Erreur lors de la validation des versions',
+                details: error.message,
+                stack: error.stack
+            });
+        }
     } catch (error) {
-        console.error('Erreur:', error);
+        console.error('Error in /messages/:messageId/versions:', error);
         res.status(500).json({ 
             error: 'Erreur lors de la récupération des versions',
-            details: error.message 
+            details: error.message,
+            stack: error.stack
         });
     }
 });
@@ -406,34 +441,39 @@ app.get('/versions/:id/messages', (req, res) => {
         const versionId = req.params.id;
         const messages = queries.getMessagesFromVersionGroup.all(versionId);
         
-        // Pour chaque message, récupérer les versions disponibles et identifier les points de divergence
-        const messagesWithVersions = messages.map(msg => {
-            const versions = queries.getMessageVersions.all(msg.ordre, msg.conversation_id);
-            
-            // Un message est un point de divergence seulement s'il a été modifié
-            // et que ses versions ont des contenus différents
-            const isDivergencePoint = versions.length > 1 && versions.some(v => v.content !== msg.content);
-            
-            // Pour chaque version, récupérer les messages qui suivent
-            const versionsWithContext = versions.map(v => {
-                const versionMessages = queries.getMessagesFromVersionGroup.all(v.version_id);
-                const startIndex = versionMessages.findIndex(m => m.ordre === msg.ordre);
-                return {
-                    versionId: v.version_id,
-                    timestamp: v.timestamp,
-                    // Inclure les messages qui suivent dans cette version
-                    subsequentMessages: versionMessages.slice(startIndex)
-                };
+        // Pour chaque message, vérifier s'il s'agit d'un point de divergence
+        const messagesWithDivergence = messages.map(msg => {
+            // Vérifier s'il existe d'autres versions avec un contenu différent à cet ordre
+            const otherVersions = db.prepare(`
+                SELECT DISTINCT m2.content
+                FROM messages m2
+                JOIN message_versions mv2 ON mv2.message_id = m2.id
+                JOIN versions v2 ON v2.id = mv2.version_id
+                WHERE v2.conversation_id = (
+                    SELECT conversation_id 
+                    FROM versions 
+                    WHERE id = ?
+                )
+                AND m2.ordre = ?
+            `).all(versionId, msg.ordre);
+
+            console.log('Divergence check for message:', {
+                messageId: msg.id,
+                ordre: msg.ordre,
+                content: msg.content,
+                otherVersions: otherVersions
             });
 
+            // Un message est un point de divergence s'il existe au moins un contenu différent
+            const isDivergencePoint = otherVersions.some(v => v.content !== msg.content);
+            
             return {
                 ...msg,
-                isDivergencePoint,
-                availableVersions: isDivergencePoint ? versionsWithContext : []
+                isDivergencePoint
             };
         });
-
-        res.json({ messages: messagesWithVersions });
+        
+        res.json({ messages: messagesWithDivergence });
     } catch (error) {
         console.error('Erreur:', error);
         res.status(500).json({ 

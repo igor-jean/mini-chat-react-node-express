@@ -126,22 +126,43 @@ const Message = ({
           </div>
 
           {/* Contrôles de version - uniquement pour les points de divergence */}
-          {type === 'user' && isDivergencePoint && availableVersions.length > 1 && (
+          {type === 'user' && isDivergencePoint && availableVersions && availableVersions.length > 1 && (
             <div className="flex items-center gap-2 mt-2 bg-accent/10 px-2 py-1 rounded-md">
-              {console.log('Version data:', {
+              {console.log('Message props:', {
+                type,
+                isDivergencePoint,
                 availableVersions,
-                currentVersionId,
-                currentIndex: availableVersions.findIndex(v => v.versionId === currentVersionId)
+                currentVersionId
               })}
+              {console.log('Available versions structure:', availableVersions.map(v => ({
+                content: v.content,
+                versionIds: v.versions?.map(ver => ver.versionId)
+              })))}
               <button
                 onClick={() => {
-                  const currentIndex = availableVersions.findIndex(v => v.versionId === currentVersionId);
-                  if (currentIndex > 0) {
-                    onVersionChange(messageId, availableVersions[currentIndex - 1].versionId);
+                  const currentGroupIndex = availableVersions.findIndex(
+                    group => group && group.versions && Array.isArray(group.versions) && 
+                    group.versions.some(v => v && v.versionId === parseInt(currentVersionId))
+                  );
+                  console.log('Navigation info:', {
+                    currentVersionId,
+                    currentGroupIndex,
+                    availableVersions: availableVersions.map(v => ({
+                      content: v.content,
+                      versionIds: v.versions?.map(ver => ver.versionId)
+                    }))
+                  });
+                  if (currentGroupIndex > 0 && availableVersions[currentGroupIndex - 1]?.versions?.[0]?.versionId) {
+                    const nextVersionId = availableVersions[currentGroupIndex - 1].versions[0].versionId;
+                    console.log('Switching to version:', nextVersionId);
+                    onVersionChange(messageId, nextVersionId);
                   }
                 }}
                 className="p-1 hover:bg-accent rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!currentVersionId || availableVersions.findIndex(v => v.versionId === currentVersionId) <= 0}
+                disabled={!currentVersionId || availableVersions.findIndex(
+                  group => group && group.versions && Array.isArray(group.versions) && 
+                  group.versions.some(v => v && v.versionId === parseInt(currentVersionId))
+                ) <= 0}
                 title="Version précédente"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -149,20 +170,34 @@ const Message = ({
 
               <div className="min-w-[3rem] text-center text-sm">
                 {(() => {
-                  const currentIndex = availableVersions.findIndex(v => v.versionId === currentVersionId);
-                  return currentIndex >= 0 ? `${currentIndex + 1}/${availableVersions.length}` : '-';
+                  const currentGroupIndex = availableVersions.findIndex(
+                    group => group && group.versions && Array.isArray(group.versions) && 
+                    group.versions.some(v => v && v.versionId === parseInt(currentVersionId))
+                  );
+                  console.log('Display info:', {
+                    currentVersionId,
+                    currentGroupIndex,
+                    totalGroups: availableVersions.length
+                  });
+                  return currentGroupIndex >= 0 ? `${currentGroupIndex + 1}/${availableVersions.length}` : '-';
                 })()}
               </div>
 
               <button
                 onClick={() => {
-                  const currentIndex = availableVersions.findIndex(v => v.versionId === currentVersionId);
-                  if (currentIndex < availableVersions.length - 1) {
-                    onVersionChange(messageId, availableVersions[currentIndex + 1].versionId);
+                  const currentGroupIndex = availableVersions.findIndex(
+                    group => group && group.versions && Array.isArray(group.versions) && 
+                    group.versions.some(v => v && v.versionId === parseInt(currentVersionId))
+                  );
+                  if (currentGroupIndex < availableVersions.length - 1 && availableVersions[currentGroupIndex + 1]?.versions?.[0]?.versionId) {
+                    onVersionChange(messageId, availableVersions[currentGroupIndex + 1].versions[0].versionId);
                   }
                 }}
                 className="p-1 hover:bg-accent rounded-full disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={!currentVersionId || availableVersions.findIndex(v => v.versionId === currentVersionId) >= availableVersions.length - 1}
+                disabled={!currentVersionId || availableVersions.findIndex(
+                  group => group && group.versions && Array.isArray(group.versions) && 
+                  group.versions.some(v => v && v.versionId === parseInt(currentVersionId))
+                ) >= availableVersions.length - 1}
                 title="Version suivante"
               >
                 <ChevronRight className="w-4 h-4" />
