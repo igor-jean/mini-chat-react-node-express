@@ -105,6 +105,7 @@ function App() {
       const { data } = await api.post('/conversations');
       if (data.id) {
         setCurrentConversationId(data.id);
+        setCurrentVersionId(null);
         setMessages([]);
         await fetchConversations();
       }
@@ -123,6 +124,12 @@ function App() {
     });
 
     try {
+      if (!currentConversationId) {
+        const { data } = await api.post('/conversations');
+        setCurrentConversationId(data.id);
+        setCurrentVersionId(null);
+      }
+
       const { data } = await api.post('/chat', {
         message,
         conversationId: currentConversationId,
@@ -166,10 +173,6 @@ function App() {
           return formattedMessage;
         }));
         setMessages(formattedMessages);
-      }
-
-      if (!currentConversationId) {
-        setCurrentConversationId(data.conversationId);
       }
 
       await fetchConversations();
