@@ -39,7 +39,7 @@ db.exec(`
     CREATE TABLE IF NOT EXISTS versions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         conversation_id INTEGER,
-        version_group TEXT, -- Liste des IDs de messages au format JSON
+        version_group TEXT,
         timestamp NUMERIC,
         FOREIGN KEY (conversation_id) REFERENCES conversations(id)
     );
@@ -50,6 +50,15 @@ db.exec(`
         version_id INTEGER,
         FOREIGN KEY (message_id) REFERENCES messages(id),
         FOREIGN KEY (version_id) REFERENCES versions(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS informations (
+        conversation_id INTEGER PRIMARY KEY,
+        identite TEXT,
+        age TEXT,
+        localisation TEXT,
+        timestamp NUMERIC,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id)
     );
 `);
 
@@ -129,7 +138,29 @@ const queries = {
         )
     `),
     
-    deleteVersions: db.prepare('DELETE FROM versions WHERE conversation_id = ?')
+    deleteVersions: db.prepare('DELETE FROM versions WHERE conversation_id = ?'),
+    
+    deleteMessages: db.prepare('DELETE FROM messages WHERE conversation_id = ?'),
+    
+    deleteInformation: db.prepare('DELETE FROM informations WHERE conversation_id = ?'),
+    
+    deleteConversation: db.prepare('DELETE FROM conversations WHERE id = ?'),
+    
+    upsertInformation: db.prepare(`
+        INSERT INTO informations (conversation_id, identite, age, localisation, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(conversation_id) 
+        DO UPDATE SET 
+            identite = COALESCE(excluded.identite, identite),
+            age = COALESCE(excluded.age, age),
+            localisation = COALESCE(excluded.localisation, localisation),
+            timestamp = excluded.timestamp
+    `),
+    
+    getInformation: db.prepare(`
+        SELECT * FROM informations 
+        WHERE conversation_id = ?
+    `)
 };
 
 // Fonction pour mettre à jour un groupe de versions existant
@@ -297,4 +328,65 @@ function getMessageVersionsWithValidation(ordre, conversationId) {
     };
 }
 
-export { db, queries, insertNewMessage, createNewVersionGroup, updateVersionGroup, calculateTokens, getMessageVersionsWithValidation };
+// Fonction pour mettre à jour les informations utilisateur
+function updateUserInformation(conversationId, entities) {
+    const now = new Date().toISOString();
+    const currentInfo = queries.getInformation.get(conversationId);
+    
+    // Préparer les nouvelles informations en conservant les anciennes si non remplacées
+    const newInfo = {
+        identite: entities.nom || currentInfo?.identite || null,
+        age: entities.age || currentInfo?.age || null,
+        localisation: entities.ville || currentInfo?.localisation || null
+    };
+
+    // Mettre à jour ou insérer les informations
+    queries.upsertInformation.run(
+        conversationId,
+        newInfo.identite,
+        newInfo.age,
+        newInfo.localisation,
+        now
+    );
+    
+    return newInfo;
+}
+
+// Fonction pour construire le contexte utilisateur
+function buildUserContext(conversationId) {
+    const info = queries.getInformation.get(conversationId);
+    if (!info) return '';
+    
+    const parts = [];
+    if (info.identite) parts.push(`vous parlez à ${info.identite}`);
+    if (info.age) parts.push(`qui a ${info.age} ans`);
+    if (info.localisation) parts.push(`et qui habite à ${info.localisation}`);
+    
+    return parts.length > 0 ? `[Context: ${parts.join(', ')}]\n` : '';
+}
+
+// Fonction pour supprimer une conversation et toutes ses données associées
+function deleteConversationAndRelated(conversationId) {
+    // Commencer une transaction
+    const transaction = db.transaction((id) => {
+        // 1. Supprimer les associations message-version
+        queries.deleteMessageVersions.run(id);
+        
+        // 2. Supprimer les versions
+        queries.deleteVersions.run(id);
+        
+        // 3. Supprimer les messages
+        queries.deleteMessages.run(id);
+        
+        // 4. Supprimer les informations
+        queries.deleteInformation.run(id);
+        
+        // 5. Enfin, supprimer la conversation
+        queries.deleteConversation.run(id);
+    });
+
+    // Exécuter la transaction
+    transaction(conversationId);
+}
+
+export { db, queries, insertNewMessage, createNewVersionGroup, updateVersionGroup, calculateTokens, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated };

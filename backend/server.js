@@ -1,8 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
-import { db, queries, insertNewMessage, calculateTokens, createNewVersionGroup, updateVersionGroup, getMessageVersionsWithValidation } from './database.js';
+import { db, queries, insertNewMessage, calculateTokens, createNewVersionGroup, updateVersionGroup, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated } from './database.js';
 import { LLAMA_PARAMS, buildPrompt } from './llamaConfig.js';
+import { extractEntities } from './nlpConfig.js';
 
 // Configuration de base du serveur Express
 const app = express();
@@ -15,6 +16,33 @@ app.post('/chat', async (req, res) => {
         let { message, conversationId, versionId } = req.body;
         const now = new Date().toISOString();
 
+        console.log('\n=== Nouvelle requête chat ===');
+        console.log('Timestamp:', new Date(now).toLocaleString('fr-FR'));
+        console.log('Message reçu:', message);
+
+        // Extraction des entités du message
+        const nlpResult = await extractEntities(message);
+        
+        // Logging détaillé des entités détectées
+        console.log('\n=== Analyse NLP ===');
+        if (Object.keys(nlpResult.entities).length > 0) {
+            console.log('Entités détectées:');
+            Object.entries(nlpResult.entities).forEach(([type, value]) => {
+                console.log(`  - ${type}: ${value}`);
+            });
+        } else {
+            console.log('Aucune entité détectée');
+        }
+        
+        // Logging du sentiment
+        console.log('\nAnalyse du sentiment:');
+        console.log(`  Score: ${nlpResult.sentiment.score}`);
+        const sentimentType = nlpResult.sentiment.score > 0 ? 'positif' : nlpResult.sentiment.score < 0 ? 'négatif' : 'neutre';
+        console.log(`  Type: ${sentimentType}`);
+        
+        console.log('\nLangue détectée:', nlpResult.language);
+        console.log('-------------------');
+
         // Vérifier si la conversation existe
         let conversation = queries.getConversation.get(conversationId);
         if (!conversation) {
@@ -24,9 +52,22 @@ app.post('/chat', async (req, res) => {
             conversation = { title: '' };
         }
 
+        // Mettre à jour les informations utilisateur si des entités sont détectées
+        if (Object.keys(nlpResult.entities).length > 0) {
+            updateUserInformation(conversationId, nlpResult.entities);
+        }
+
         // Définir le titre si c'est le premier message
         if (!conversation.title) {
-            const title = message.length > 25 ? message.substring(0, 25) + '...' : message;
+            // Utiliser les entités détectées pour un titre plus pertinent
+            const entities = nlpResult.entities;
+            let title = message;
+            if (Object.keys(entities).length > 0) {
+                title = Object.entries(entities)
+                    .map(([type, value]) => `${value} (${type})`)
+                    .join(', ');
+            }
+            title = title.length > 25 ? title.substring(0, 25) + '...' : title;
             queries.updateConversationTitle.run(title, conversationId);
         }
 
@@ -34,11 +75,11 @@ app.post('/chat', async (req, res) => {
         const userMessageId = insertNewMessage(conversationId, 'user', message, now);
 
         // Construire le contexte pour l'assistant
-        let conversationContext = '';
+        let conversationContext = buildUserContext(conversationId);
+        
         if (versionId) {
-            // Si un groupe de versions est spécifié, utiliser ses messages
             const messages = queries.getMessagesFromVersionGroup.all(versionId);
-            conversationContext = messages
+            conversationContext += messages
                 .map(msg => `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`)
                 .join('\n');
         }
@@ -232,17 +273,8 @@ app.delete('/conversations/:id', (req, res) => {
     try {
         const conversationId = req.params.id;
         
-        // Supprimer d'abord les associations message-version
-        queries.deleteMessageVersions.run(conversationId);
-        
-        // Puis supprimer les versions
-        queries.deleteVersions.run(conversationId);
-        
-        // Ensuite supprimer les messages
-        queries.deleteMessages.run(conversationId);
-        
-        // Enfin supprimer la conversation
-        queries.deleteConversation.run(conversationId);
+        // Utiliser la nouvelle fonction de suppression transactionnelle
+        deleteConversationAndRelated(conversationId);
         
         res.json({ message: 'Conversation supprimée avec succès' });
     } catch (error) {
