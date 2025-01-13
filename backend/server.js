@@ -59,15 +59,7 @@ app.post('/chat', async (req, res) => {
 
         // Définir le titre si c'est le premier message
         if (!conversation.title) {
-            // Utiliser les entités détectées pour un titre plus pertinent
-            const entities = nlpResult.entities;
-            let title = message;
-            if (Object.keys(entities).length > 0) {
-                title = Object.entries(entities)
-                    .map(([type, value]) => `${value} (${type})`)
-                    .join(', ');
-            }
-            title = title.length > 25 ? title.substring(0, 25) + '...' : title;
+            let title = message.length > 40 ? message.substring(0, 40) + '...' : message;
             queries.updateConversationTitle.run(title, conversationId);
         }
 
@@ -405,12 +397,7 @@ app.put('/messages/:messageId', async (req, res) => {
         // Ajouter la réponse au groupe
         newGroup.push(assistantMessageId);
 
-        // Si le message modifié n'était pas le dernier, ajouter les messages suivants
-        if (messageIndex + 2 < currentGroup.length) {
-            newGroup.push(...currentGroup.slice(messageIndex + 2));
-        }
-
-        // Créer la version finale avec tous les messages
+        // Créer la version finale avec uniquement les messages jusqu'au message modifié et la nouvelle réponse
         const finalVersionId = createNewVersionGroup(originalMessage.conversation_id, newGroup);
 
         res.json({ 
