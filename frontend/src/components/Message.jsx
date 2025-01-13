@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import ClipLoader from 'react-spinners/ClipLoader';
 import { Bot, User, Edit, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import rehypeHighlight from 'rehype-highlight';
 
 // Composant Message qui affiche un message individuel avec son style et ses métadonnées
 // props:
@@ -91,14 +92,10 @@ const Message = ({
               </div>
             )}
             {type === 'assistant' ? (
-              <ReactMarkdown className="prose prose-invert max-w-none
-                prose-headings:text-blue-300
-                prose-p:text-gray-100
-                prose-strong:text-yellow-300
-                prose-em:text-green-300
-                prose-code:text-pink-300
-                prose-ul:text-gray-100
-                prose-li:text-gray-100">
+              <ReactMarkdown 
+                rehypePlugins={[rehypeHighlight]} 
+                className="prose prose-lg text-white prose-headings:text-blue-400 prose-p:text-white prose-strong:text-white"
+              >
                 {content}
               </ReactMarkdown>
             ) : (
