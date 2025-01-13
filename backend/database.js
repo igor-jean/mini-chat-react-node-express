@@ -389,4 +389,37 @@ function deleteConversationAndRelated(conversationId) {
     transaction(conversationId);
 }
 
-export { db, queries, insertNewMessage, createNewVersionGroup, updateVersionGroup, calculateTokens, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated };
+// Fonction pour récupérer les messages pertinents de l'historique
+function getRelevantMessages(versionId, maxTokens) {
+    const messages = queries.getMessagesFromVersionGroup.all(versionId);
+    if (!messages.length) return [];
+
+    // Garder toujours le premier message
+    const firstMessage = messages[0];
+    const remainingMessages = messages.slice(1);
+    
+    // Initialiser avec le premier message
+    const selectedMessages = [firstMessage];
+    let currentTokens = calculateTokens(
+        `<|start_header_id|>${firstMessage.role}<|end_header_id|>${firstMessage.content}<|eot_id|>`
+    );
+
+    // Parcourir les messages du plus récent au plus ancien
+    for (const msg of remainingMessages.reverse()) {
+        const msgContext = `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`;
+        const msgTokens = calculateTokens(msgContext);
+
+        // Vérifier si l'ajout de ce message dépasserait la limite
+        if (currentTokens + msgTokens > maxTokens) {
+            break;
+        }
+
+        // Ajouter le message au début (après le premier message)
+        selectedMessages.splice(1, 0, msg);
+        currentTokens += msgTokens;
+    }
+
+    return selectedMessages;
+}
+
+export { db, queries, insertNewMessage, createNewVersionGroup, updateVersionGroup, calculateTokens, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated, getRelevantMessages };

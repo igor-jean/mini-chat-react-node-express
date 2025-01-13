@@ -11,3 +11,5 @@ llama.cpp/
 # Ignorer le fichier chat.db
 chat.db
 
+# Ignorer le fichier model.nlp
+backend/model.nlp

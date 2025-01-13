@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
-import { db, queries, insertNewMessage, calculateTokens, createNewVersionGroup, updateVersionGroup, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated } from './database.js';
+import { db, queries, insertNewMessage, calculateTokens, createNewVersionGroup, updateVersionGroup, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated, getRelevantMessages } from './database.js';
 import { LLAMA_PARAMS, buildPrompt } from './llamaConfig.js';
 import { extractEntities } from './nlpConfig.js';
 
@@ -76,16 +76,32 @@ app.post('/chat', async (req, res) => {
 
         // Construire le contexte pour l'assistant
         let conversationContext = buildUserContext(conversationId);
+        const userContextTokens = calculateTokens(conversationContext);
         
         if (versionId) {
-            const messages = queries.getMessagesFromVersionGroup.all(versionId);
-            conversationContext += messages
-                .map(msg => `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`)
-                .join('\n');
+            // Calculer l'espace disponible pour les messages
+            const availableTokens = LLAMA_PARAMS.truncation_length - 1000 - userContextTokens;
+            
+            // Récupérer les messages pertinents dans la limite des tokens disponibles
+            const relevantMessages = getRelevantMessages(versionId, availableTokens);
+            
+            // Ajouter les messages au contexte
+            const messageContexts = relevantMessages.map(msg => 
+                `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`
+            );
+            
+            conversationContext += messageContexts.join('\n');
         }
-        
+
         // Modification du format du prompt pour suivre la documentation Llama
         const fullPrompt = buildPrompt(conversationContext, message);
+
+        // Log des informations de contexte
+        console.log('\n=== Informations de contexte ===');
+        console.log('Tokens du contexte utilisateur:', userContextTokens);
+        console.log('Nombre total de tokens:', calculateTokens(fullPrompt));
+        console.log('Nombre de messages dans le contexte:', conversationContext.split('<|start_header_id|>').length - 1);
+        console.log('-------------------');
 
         // Calculer le nombre total de tokens
         const totalTokens = calculateTokens(fullPrompt);
