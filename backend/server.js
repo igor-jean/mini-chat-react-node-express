@@ -435,7 +435,7 @@ app.get('/conversations/:id/latest-version', (req, res) => {
         const latestVersion = queries.getLatestVersionGroup.get(conversationId);
         
         if (!latestVersion) {
-            return res.status(404).json({ error: 'Aucun groupe de versions trouvé' });
+            return res.json({ message: 'Aucun groupe de versions disponible' });
         }
 
         res.json({ 

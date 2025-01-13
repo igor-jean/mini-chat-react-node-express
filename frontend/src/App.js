@@ -100,18 +100,10 @@ function App() {
 
   //  Crée une nouvelle conversation sur le serveur
   //  et met à jour l'état avec la nouvelle conversation
-  const createNewConversation = async () => {
-    try {
-      const { data } = await api.post('/conversations');
-      if (data.id) {
-        setCurrentConversationId(data.id);
-        setCurrentVersionId(null);
-        setMessages([]);
-        await fetchConversations();
-      }
-    } catch (error) {
-      // Erreur silencieuse
-    }
+  const createNewConversation = () => {
+    setCurrentConversationId(null);
+    setCurrentVersionId(null);
+    setMessages([]);
   };
 
 //  Gère l'envoi d'un message à l'assistant
@@ -124,15 +116,19 @@ function App() {
     });
 
     try {
-      if (!currentConversationId) {
+      let conversationId = currentConversationId;
+      
+      // Si pas de conversation active, en créer une nouvelle
+      if (!conversationId) {
         const { data } = await api.post('/conversations');
-        setCurrentConversationId(data.id);
+        conversationId = data.id;
+        setCurrentConversationId(conversationId);
         setCurrentVersionId(null);
       }
 
       const { data } = await api.post('/chat', {
         message,
-        conversationId: currentConversationId,
+        conversationId: conversationId,
         versionId: currentVersionId
       });
 
@@ -291,7 +287,7 @@ function App() {
         <div className="w-96 border border-border rounded-2xl p-4">
           <button
             onClick={createNewConversation}
-            disabled={conversations.length === 0 || (currentConversationId && messages.length === 0)}
+            disabled={conversations.length === 0}
             className="w-full flex items-center justify-center gap-2 px-4 py-2 mb-4 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <PlusCircle className="w-4 h-4" />
