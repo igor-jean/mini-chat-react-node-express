@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ClipLoader from 'react-spinners/ClipLoader';
 import { Bot, User, Edit, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -17,6 +17,7 @@ import rehypeHighlight from 'rehype-highlight';
 //   - currentVersionId: ID de la version actuellement affichée
 //   - onMessageUpdate: fonction appelée lors de la modification d'un message
 //   - onVersionChange: fonction appelée lors du changement de version
+//   - conversationId: ID de la conversation
 const Message = ({ 
   type, 
   content, 
@@ -28,10 +29,17 @@ const Message = ({
   availableVersions = [],
   isDivergencePoint = false,
   currentVersionId,
-  onVersionChange
+  onVersionChange,
+  conversationId
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
+
+  // Réinitialiser l'état d'édition lors du changement de conversation
+  useEffect(() => {
+    setIsEditing(false);
+    setEditedContent(content);
+  }, [conversationId, content]);
 
   const handleSaveEdit = async () => {
     try {
