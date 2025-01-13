@@ -115,6 +115,17 @@ function App() {
       minute: '2-digit',
     });
 
+    // Ajouter immédiatement le message de l'utilisateur
+    setMessages(prev => [...prev, {
+      type: 'user',
+      content: message,
+      timestamp: timestamp
+    }, {
+      type: 'assistant',
+      content: 'En train de réfléchir...',
+      timestamp: timestamp
+    }]);
+
     try {
       let conversationId = currentConversationId;
       
