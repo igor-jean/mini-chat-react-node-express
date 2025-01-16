@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ClipLoader from 'react-spinners/ClipLoader';
-import { Bot, User, Edit, Check, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bot, User, Edit, Check, X, ChevronLeft, ChevronRight, Clock, Clock1, Clock12 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
 
@@ -23,6 +23,7 @@ const Message = ({
   content, 
   showSpinner, 
   responseTime, 
+  nbTokens,
   timestamp, 
   messageId, 
   onMessageUpdate, 
@@ -204,8 +205,9 @@ const Message = ({
 
           {/* Temps de réponse pour les messages de l'assistant */}
           {type === 'assistant' && responseTime && (
-            <span className="text-xs text-muted-foreground mt-1 ml-1">
-              Temps de réponse : {responseTime}s
+            <span className="text-xs text-muted-foreground mt-1 ml-1 flex items-center gap-1">
+              <Clock12 className="w-3 h-3" />
+              {(responseTime / 1000).toFixed(2)}s • {nbTokens} tokens • {(nbTokens / (responseTime / 1000)).toFixed(2)} tokens/s
             </span>
           )}
         </div>

@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import fetch from 'node-fetch';
-import { db, queries, insertNewMessage, calculateTokens, createNewVersionGroup, updateVersionGroup, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated, getRelevantMessages } from './database.js';
+import { db, queries, insertNewMessage, calculateTokens, createNewVersionGroup, updateVersionGroup, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated, getRelevantMessages, insertAssistantMessage } from './database.js';
 import { LLAMA_PARAMS, buildPrompt } from './llamaConfig.js';
 import { extractEntities } from './nlpConfig.js';
 
@@ -15,6 +15,9 @@ app.post('/chat', async (req, res) => {
     try {
         let { message, conversationId, versionId } = req.body;
         const now = new Date().toISOString();
+
+        // Enregistrer le temps de début
+        const startTime = Date.now();
 
         console.log('\n=== Nouvelle requête chat ===');
         console.log('Timestamp:', new Date(now).toLocaleString('fr-FR'));
@@ -112,8 +115,16 @@ app.post('/chat', async (req, res) => {
             .replace(/<\|start_header_id\|>.*?<\|end_header_id\|>/g, '')
             .trim();
         
-        // Ajouter la réponse à l'historique
-        const assistantMessageId = insertNewMessage(conversationId, 'assistant', cleanResponse, now);
+        // Calculer le temps de réponse
+        const endTime = Date.now();
+        const responseTime = endTime - startTime;
+        
+        // Créer la nouvelle réponse de l'assistant avec le temps de réponse
+        const assistantMessageId = insertAssistantMessage(
+            conversationId,
+            cleanResponse,
+            startTime
+        );
 
         // Créer ou mettre à jour le groupe de versions
         let finalVersionId;
@@ -289,6 +300,9 @@ app.put('/messages/:messageId', async (req, res) => {
         const { content } = req.body;
         const now = new Date().toISOString();
 
+        // Enregistrer le temps de début
+        const startTime = Date.now();
+
         // Récupérer les informations du message original
         const originalMessage = db.prepare(`
             SELECT conversation_id, ordre, role
@@ -321,7 +335,8 @@ app.put('/messages/:messageId', async (req, res) => {
             content,
             now,
             originalMessage.ordre,
-            nbTokens
+            nbTokens,
+            null  // response_time est null pour les messages utilisateur
         ).lastInsertRowid;
 
         // Préparer le nouveau groupe de versions
@@ -379,7 +394,8 @@ app.put('/messages/:messageId', async (req, res) => {
             cleanResponse,
             now,
             originalMessage.ordre + 1,
-            assistantNbTokens
+            assistantNbTokens,
+            Date.now() - startTime
         ).lastInsertRowid;
 
         // Ajouter la réponse au groupe
@@ -407,7 +423,6 @@ app.put('/messages/:messageId', async (req, res) => {
 app.get('/messages/:messageId/versions', (req, res) => {
     try {
         const { messageId } = req.params;
-        console.log('Fetching versions for message:', messageId);
         
         // D'abord, récupérer les informations du message
         const messageInfo = db.prepare(`

@@ -38,6 +38,7 @@ const ChatBox = ({
           type={message.type}
           content={message.content}
           responseTime={message.responseTime}
+          nbTokens={message.nbTokens}
           timestamp={message.timestamp}
           showSpinner={message.type === 'assistant' && message.content === 'En train de réfléchir...'}
           conversationId={currentConversationId}

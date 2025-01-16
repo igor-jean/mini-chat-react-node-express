@@ -33,6 +33,7 @@ db.exec(`
         timestamp NUMERIC,
         ordre INTEGER DEFAULT 1,
         nb_tokens INTEGER DEFAULT 0,
+        response_time INTEGER DEFAULT NULL,
         FOREIGN KEY (conversation_id) REFERENCES conversations(id)
     );
 
@@ -66,8 +67,8 @@ db.exec(`
 const queries = {
     insertConversation: db.prepare('INSERT INTO conversations (title, timestamp) VALUES (?, ?)'),
     insertMessage: db.prepare(`
-        INSERT INTO messages (conversation_id, role, content, timestamp, ordre, nb_tokens) 
-        VALUES (?, ?, ?, ?, ?, ?) 
+        INSERT INTO messages (conversation_id, role, content, timestamp, ordre, nb_tokens, response_time) 
+        VALUES (?, ?, ?, ?, ?, ?, ?) 
         RETURNING id
     `),
     getConversation: db.prepare('SELECT * FROM conversations WHERE id = ?'),
@@ -190,7 +191,7 @@ function updateVersionGroup(versionId, messageIds) {
 }
 
 // Modification de la fonction d'insertion pour gérer les groupes de versions
-function insertNewMessage(conversationId, role, content, timestamp) {
+function insertNewMessage(conversationId, role, content, timestamp, responseTime = null) {
     const lastOrder = db.prepare(`
         SELECT MAX(ordre) as maxOrdre 
         FROM messages 
@@ -206,7 +207,8 @@ function insertNewMessage(conversationId, role, content, timestamp) {
         content, 
         timestamp, 
         lastOrder + 1,
-        nbTokens
+        nbTokens,
+        responseTime
     ).lastInsertRowid;
     
     return messageId;
@@ -422,4 +424,18 @@ function getRelevantMessages(versionId, maxTokens) {
     return selectedMessages;
 }
 
-export { db, queries, insertNewMessage, createNewVersionGroup, updateVersionGroup, calculateTokens, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated, getRelevantMessages };
+// Fonction pour calculer et insérer le temps de réponse
+function insertAssistantMessage(conversationId, content, startTime) {
+    const endTime = Date.now();
+    const responseTime = endTime - startTime;
+    
+    return insertNewMessage(
+        conversationId,
+        'assistant',
+        content,
+        new Date().toISOString(),
+        responseTime
+    );
+}
+
+export { db, queries, insertNewMessage, createNewVersionGroup, updateVersionGroup, calculateTokens, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated, getRelevantMessages, insertAssistantMessage };

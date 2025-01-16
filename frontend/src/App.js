@@ -85,7 +85,9 @@ function App() {
               ordre: msg.ordre,
               messageId: msg.id,
               isDivergencePoint: msg.isDivergencePoint,
-              availableVersions: msg.availableVersions || []
+              availableVersions: msg.availableVersions || [],
+              responseTime: msg.response_time,
+              nbTokens: msg.nb_tokens
             };
             return formattedMessage;
           }));
@@ -175,7 +177,9 @@ function App() {
             ordre: msg.ordre,
             messageId: msg.id,
             isDivergencePoint: msg.isDivergencePoint,
-            availableVersions: msg.availableVersions || []
+            availableVersions: msg.availableVersions || [],
+            responseTime: msg.response_time,
+            nbTokens: msg.nb_tokens
           };
           return formattedMessage;
         }));
@@ -239,7 +243,9 @@ function App() {
           ordre: msg.ordre,
           messageId: msg.id,
           isDivergencePoint: msg.isDivergencePoint,
-          availableVersions: msg.availableVersions || []
+          availableVersions: msg.availableVersions || [],
+          responseTime: msg.response_time,
+          nbTokens: msg.nb_tokens
         }));
         setMessages(formattedMessages);
       }
@@ -281,7 +287,9 @@ function App() {
             ordre: msg.ordre,
             messageId: msg.id,
             isDivergencePoint: msg.isDivergencePoint,
-            availableVersions: msg.availableVersions || []
+            availableVersions: msg.availableVersions || [],
+            responseTime: msg.response_time,
+            nbTokens: msg.nb_tokens
           };
           return formattedMessage;
         }));
