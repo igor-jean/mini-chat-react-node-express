@@ -34,12 +34,6 @@ app.post('/chat', async (req, res) => {
             console.log('Aucune entité détectée');
         }
         
-        // Logging du sentiment
-        console.log('\nAnalyse du sentiment:');
-        console.log(`  Score: ${nlpResult.sentiment.score}`);
-        const sentimentType = nlpResult.sentiment.score > 0 ? 'positif' : nlpResult.sentiment.score < 0 ? 'négatif' : 'neutre';
-        console.log(`  Type: ${sentimentType}`);
-        
         console.log('\nLangue détectée:', nlpResult.language);
         console.log('-------------------');
 
@@ -93,12 +87,6 @@ app.post('/chat', async (req, res) => {
         console.log('Tokens du contexte utilisateur:', userContextTokens);
         console.log('Nombre total de tokens:', calculateTokens(fullPrompt));
         console.log('Nombre de messages dans le contexte:', conversationContext.split('<|start_header_id|>').length - 1);
-        console.log('-------------------');
-
-        // Calculer le nombre total de tokens
-        const totalTokens = calculateTokens(fullPrompt);
-        console.log('\n=== Informations de contexte ===');
-        console.log('Nombre total de tokens:', totalTokens);
         console.log('Contexte complet:');
         console.log('-------------------');
         console.log(fullPrompt);
