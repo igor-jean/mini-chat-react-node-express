@@ -116,6 +116,12 @@ const Message = ({
                     e.target.style.height = 'auto';
                     e.target.style.height = e.target.scrollHeight + 'px';
                   }}
+                  ref={(textarea) => {
+                    if (textarea) {
+                      textarea.style.height = 'auto';
+                      textarea.style.height = textarea.scrollHeight + 'px';
+                    }
+                  }}
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
