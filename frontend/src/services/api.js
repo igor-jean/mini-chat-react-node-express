@@ -53,9 +53,4 @@ export const conversationService = {
         const { data } = await api.get(`/versions/${versionId}/messages`);
         return data;
     },
-
-    reset: async (id) => {
-        const { data } = await api.post(`/reset/${id}`);
-        return data;
-    }
 }; 

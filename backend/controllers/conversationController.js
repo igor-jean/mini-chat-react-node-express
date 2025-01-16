@@ -151,32 +151,3 @@ export const deleteConversation = (req, res) => {
         });
     }
 };
-
-export const resetConversation = (req, res) => {
-    try {
-        const conversationId = req.params.id;
-        
-        if (!conversationId) {
-            return res.status(400).json({ 
-                error: 'ID de conversation requis' 
-            });
-        }
-
-        const conversation = queries.getConversation.get(conversationId);
-        if (!conversation) {
-            return res.status(404).json({ 
-                error: 'Conversation non trouvée' 
-            });
-        }
-
-        queries.deleteMessages.run(conversationId);
-
-        res.json({ message: 'Session réinitialisée avec succès' });
-    } catch (error) {
-        console.error('Erreur lors de la réinitialisation:', error);
-        res.status(500).json({ 
-            error: 'Erreur lors de la réinitialisation',
-            details: error.message 
-        });
-    }
-}; 
