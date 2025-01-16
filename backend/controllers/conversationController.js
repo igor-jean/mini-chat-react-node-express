@@ -151,3 +151,30 @@ export const deleteConversation = (req, res) => {
         });
     }
 };
+
+export const updateConversationTitle = (req, res) => {
+    try {
+        const conversationId = req.params.id;
+        const { title } = req.body;
+        
+        if (!title || title.trim() === '') {
+            return res.status(400).json({ 
+                error: 'Le titre ne peut pas être vide' 
+            });
+        }
+
+        db.prepare('UPDATE conversations SET title = ? WHERE id = ?')
+          .run(title.trim(), conversationId);
+
+        res.json({ 
+            message: 'Titre mis à jour avec succès',
+            title: title.trim()
+        });
+    } catch (error) {
+        console.error('Erreur:', error);
+        res.status(500).json({ 
+            error: 'Erreur lors de la mise à jour du titre',
+            details: error.message 
+        });
+    }
+};

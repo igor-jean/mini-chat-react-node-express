@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ChatBox from './components/ChatBox';
 import MessageInput from './components/MessageInput';
 import './styles/globals.css';
-import { Bot, PlusCircle, X } from 'lucide-react';
+import { Bot, PlusCircle, X, Pencil, Check } from 'lucide-react';
 import { useChat } from './hooks/useChat';
 
 function App() {
@@ -17,8 +17,27 @@ function App() {
     handleVersionChange,
     createNewConversation,
     deleteConversation,
-    setCurrentConversationId
+    setCurrentConversationId,
+    updateConversationTitle
   } = useChat();
+
+  const [editingTitleId, setEditingTitleId] = useState(null);
+  const [editedTitle, setEditedTitle] = useState('');
+
+  const handleEditTitle = (conv) => {
+    setEditingTitleId(conv.id);
+    setEditedTitle(conv.title);
+  };
+
+  const handleTitleSave = async (convId) => {
+    await updateConversationTitle(convId, editedTitle);
+    setEditingTitleId(null);
+  };
+
+  const handleTitleCancel = () => {
+    setEditingTitleId(null);
+    setEditedTitle('');
+  };
 
   return (
     <div className="min-h-screen bg-background p-12">
@@ -39,22 +58,54 @@ function App() {
                 key={conv.id}
                 className="flex items-center group"
               >
-                <button
-                  onClick={() => setCurrentConversationId(conv.id)}
-                  className={`flex-1 text-left p-2 rounded-l-md hover:bg-accent truncate ${
-                    currentConversationId === conv.id ? 'bg-accent' : ''
-                  }`}
-                >
-                  {conv.title}
-                </button>
-                <button
-                  onClick={(e) => deleteConversation(conv.id, e)}
-                  className={`p-2 rounded-r-md hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity ${
-                    currentConversationId === conv.id ? 'bg-accent' : ''
-                  }`}
-                >
-                  <X/>
-                </button>
+                {editingTitleId === conv.id ? (
+                  <div className="flex-1 flex items-center gap-1">
+                    <input
+                      type="text"
+                      value={editedTitle}
+                      onChange={(e) => setEditedTitle(e.target.value)}
+                      className="flex-1 p-2 rounded-l-md bg-background border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleTitleSave(conv.id)}
+                      className="p-2 hover:bg-accent"
+                    >
+                      <Check className=" text-green-600" />
+                    </button>
+                    <button
+                      onClick={handleTitleCancel}
+                      className="p-2 hover:bg-accent rounded-r-md"
+                    >
+                      <X className=" text-red-600" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setCurrentConversationId(conv.id)}
+                      className={`flex-1 text-left p-2 rounded-l-md hover:bg-accent truncate ${
+                        currentConversationId === conv.id ? 'bg-accent' : ''
+                      }`}
+                    >
+                      {conv.title}
+                    </button>
+                    <button
+                      onClick={() => handleEditTitle(conv)}
+                      className={`p-2 hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity`}
+                    >
+                      <Pencil/>
+                    </button>
+                    <button
+                      onClick={(e) => deleteConversation(conv.id, e)}
+                      className={`p-2 rounded-r-md hover:bg-destructive hover:text-destructive-foreground opacity-0 group-hover:opacity-100 transition-opacity ${
+                        currentConversationId === conv.id ? 'bg-accent' : ''
+                      }`}
+                    >
+                      <X/>
+                    </button>
+                  </>
+                )}
               </div>
             ))}
           </div>

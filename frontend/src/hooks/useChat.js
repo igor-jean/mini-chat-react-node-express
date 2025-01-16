@@ -264,6 +264,18 @@ export const useChat = () => {
         }
     };
 
+    const updateConversationTitle = async (conversationId, newTitle) => {
+        try {
+            const data = await conversationService.updateTitle(conversationId, newTitle);
+            setConversations(conversations.map(conv =>
+                conv.id === conversationId ? { ...conv, title: data.title } : conv
+            ));
+        } catch (error) {
+            console.error('Erreur:', error);
+            // Vous pouvez ajouter ici une notification d'erreur si vous le souhaitez
+        }
+    };
+
     return {
         messages,
         conversations,
@@ -275,6 +287,7 @@ export const useChat = () => {
         handleVersionChange,
         createNewConversation,
         deleteConversation,
-        setCurrentConversationId
+        setCurrentConversationId,
+        updateConversationTitle
     };
 }; 

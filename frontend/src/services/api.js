@@ -28,29 +28,52 @@ export const chatService = {
     }
 };
 
+const API_URL = 'http://localhost:3001';
+
 export const conversationService = {
     getAll: async () => {
-        const { data } = await api.get('/conversations');
-        return data;
+        const response = await fetch(`${API_URL}/conversations`);
+        if (!response.ok) throw new Error('Erreur lors de la récupération des conversations');
+        return response.json();
     },
 
     create: async () => {
-        const { data } = await api.post('/conversations');
-        return data;
+        const response = await fetch(`${API_URL}/conversations`, {
+            method: 'POST'
+        });
+        if (!response.ok) throw new Error('Erreur lors de la création de la conversation');
+        return response.json();
     },
 
     delete: async (id) => {
-        const { data } = await api.delete(`/conversations/${id}`);
-        return data;
+        const response = await fetch(`${API_URL}/conversations/${id}`, {
+            method: 'DELETE'
+        });
+        if (!response.ok) throw new Error('Erreur lors de la suppression de la conversation');
+        return response.json();
+    },
+
+    updateTitle: async (id, title) => {
+        const response = await fetch(`${API_URL}/conversations/${id}/title`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ title }),
+        });
+        if (!response.ok) throw new Error('Erreur lors de la mise à jour du titre');
+        return response.json();
     },
 
     getLatestVersion: async (id) => {
-        const { data } = await api.get(`/conversations/${id}/latest-version`);
-        return data;
+        const response = await fetch(`${API_URL}/conversations/${id}/latest-version`);
+        if (!response.ok) throw new Error('Erreur lors de la récupération de la dernière version');
+        return response.json();
     },
 
     getVersionMessages: async (versionId) => {
-        const { data } = await api.get(`/versions/${versionId}/messages`);
-        return data;
-    },
+        const response = await fetch(`${API_URL}/versions/${versionId}/messages`);
+        if (!response.ok) throw new Error('Erreur lors de la récupération des messages');
+        return response.json();
+    }
 }; 
