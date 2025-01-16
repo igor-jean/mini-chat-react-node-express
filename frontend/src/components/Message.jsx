@@ -34,21 +34,26 @@ const Message = ({
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   // Réinitialiser l'état d'édition lors du changement de conversation
   useEffect(() => {
     setIsEditing(false);
     setEditedContent(content);
+    setIsUpdating(false);
   }, [conversationId, content]);
 
   const handleSaveEdit = async () => {
     try {
       if (editedContent !== content) {
+        setIsUpdating(true);
         await onMessageUpdate(messageId, editedContent);
         setIsEditing(false);
       }
     } catch (error) {
       console.error('Erreur lors de la modification du message:', error);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -75,7 +80,7 @@ const Message = ({
               ? 'bg-primary' 
               : 'bg-secondary'}
           `}>
-            {type === 'user' && (
+            {type === 'user' && !isUpdating && (
               <div className="absolute right-1 bottom-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 {isEditing ? (
                   <div className="flex gap-1">
@@ -133,6 +138,11 @@ const Message = ({
               ) : (
                 content
               )
+            )}
+            {isUpdating && (
+              <div className="absolute inset-0 bg-primary/50 rounded-[0.5rem] flex items-center justify-center">
+                <ClipLoader color="white" size={20} />
+              </div>
             )}
           </div>
 
