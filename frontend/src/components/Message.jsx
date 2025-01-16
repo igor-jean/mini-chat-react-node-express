@@ -108,7 +108,7 @@ const Message = ({
             {type === 'assistant' ? (
               <ReactMarkdown 
                 rehypePlugins={[rehypeHighlight]} 
-                className="prose prose-lg text-white prose-headings:text-blue-400 prose-p:text-white prose-strong:text-white"
+                className="prose prose-lg text-white prose-headings:text-white prose-p:text-white prose-strong:text-white"
               >
                 {content}
               </ReactMarkdown>

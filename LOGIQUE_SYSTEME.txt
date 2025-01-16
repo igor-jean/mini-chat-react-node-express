@@ -1,0 +1,100 @@
+# Logique du Système de Chat
+
+## 1. Système de Versionnage et Modifications
+
+### Concept de Base
+Le système utilise un mécanisme sophistiqué de versionnage qui permet de :
+- Suivre les modifications des messages
+- Maintenir plusieurs versions d'une même conversation
+- Gérer les points de divergence
+- Assurer la cohérence des réponses
+
+### Points de Divergence et Modifications
+- Un point de divergence apparaît quand un message est modifié
+- Le système crée alors une nouvelle branche de conversation
+- Processus de modification :
+  1. Création d'une nouvelle version du message modifié
+  2. Génération d'une nouvelle réponse de l'assistant
+  3. Création d'un nouveau groupe de versions
+  4. Les messages précédant le point de divergence restent identiques
+
+### Exemple de Modification et Divergence
+```
+Version 1 (Original) :
+  Message 1: "Bonjour"
+  Message 2: "Comment puis-je vous aider?"
+  Message 3: "J'ai une question sur X"
+  Message 4: "Je peux vous aider avec X"
+
+Version 2 (Après modification de Message 3) :
+  Message 1: "Bonjour"                          [inchangé]
+  Message 2: "Comment puis-je vous aider?"      [inchangé]
+  Message 3: "J'ai une question sur Y"          [modifié - point de divergence]
+  Message 4: "Je peux vous aider avec Y"        [nouvelle réponse]
+```
+
+### Validation des Versions : Comment ça marche ?
+Imaginez une conversation comme un arbre qui se divise quand on modifie un message :
+
+1. **Version Originale** :
+   ```
+   Message 1 -> Message 2 -> Message 3 -> Message 4
+   ```
+
+2. **Si on modifie Message 3** :
+   ```
+   Version A : Message 1 -> Message 2 -> Message 3  -> Message 4
+   Version B : Message 1 -> Message 2 -> Message 3' -> Message 4'
+   ```
+
+Le système vérifie alors :
+- Que Message 1 et Message 2 sont IDENTIQUES dans les deux versions
+- Que seuls Message 3 et Message 4 peuvent être différents
+
+## 2. Gestion des Tokens et Limite de Contexte
+
+### Pourquoi une limite ?
+- Le modèle Llama a une limite maximale de 8192 tokens (truncation_length)
+- Pour éviter les erreurs, on garde une marge de sécurité de 1000 tokens
+- Donc on limite le contexte à 7192 tokens maximum (truncation_length - 1000)
+
+### Comment ça fonctionne ?
+1. **Calcul du Contexte** :
+   - On commence TOUJOURS par le premier message (important pour le contexte)
+   - On ajoute les messages les plus récents
+   - On s'arrête AVANT d'atteindre 7192 tokens
+
+2. **Exemple** :
+   ```
+   Limite effective : 7192 tokens
+   
+   Message 1 : 500 tokens  [GARDÉ - Premier message]
+   Message 8 : 1000 tokens [GARDÉ - Message récent]
+   Message 9 : 2000 tokens [GARDÉ - Message récent]
+   Message 10 : 3000 tokens [GARDÉ - Dernier message]
+   
+   Total : 6500 tokens < 7192 (OK)
+   Les autres messages sont ignorés pour respecter la limite
+   ```
+
+## 3. Gestion des Informations Utilisateur
+
+### Extraction et Utilisation
+- Analyse NLP pour identifier :
+  - Identité (noms)
+  - Âge
+  - Localisation
+- Stockage dans la table 'informations'
+- Format du contexte : [Context: vous parlez à X, qui a Y ans, et qui habite à Z]
+- Mise à jour dynamique des informations
+
+## 4. Optimisations et Performance
+
+### Gestion de la Mémoire
+- Limite de tokens pour le contexte
+- Conservation sélective des messages
+- Nettoyage des versions invalides
+
+### Mesures de Performance
+- Suivi du temps de traitement
+- Stockage des temps de réponse

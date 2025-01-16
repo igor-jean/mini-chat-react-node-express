@@ -8,7 +8,6 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 -   Gestion de multiples conversations
 -   Suppression de conversations
 -   Historique des messages par conversation
--   Réinitialisation des conversations
 -   Support de la coloration syntaxique pour le code
 -   Modification des messages
 -   Versionnage des messages
@@ -18,6 +17,7 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 ### Frontend (React)
 
 -   **Technologies principales** :
+
     -   React 19
     -   Tailwind CSS
     -   Lucide React
@@ -26,9 +26,26 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
     -   Styled Components
     -   Rehype Highlight
 
+-   **Structure** :
+    ```
+    frontend/src/
+    ├── components/          # Composants React
+    │   ├── ChatBox.jsx     # Affichage des messages
+    │   ├── Message.jsx     # Composant de message individuel
+    │   └── MessageInput.jsx # Saisie des messages
+    ├── services/           # Services pour les appels API
+    │   └── api.js         # Configuration et fonctions d'appel API
+    ├── hooks/             # Hooks personnalisés
+    │   └── useChat.js     # Logique de gestion du chat
+    ├── styles/            # Styles globaux
+    │   └── globals.css
+    └── App.js             # Composant principal
+    ```
+
 ### Backend (Node.js/Express)
 
 -   **Technologies principales** :
+
     -   Express.js
     -   Node Llama CPP
     -   SQLite (better-sqlite3)
@@ -36,79 +53,71 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
     -   UUID
     -   Tiktoken
 
+-   **Structure** :
+    ```
+    backend/
+    ├── config/            # Configuration
+    │   ├── llamaConfig.js # Configuration du modèle Llama
+    │   └── nlpConfig.js   # Configuration NLP
+    ├── controllers/       # Contrôleurs
+    │   ├── chatController.js      # Logique du chat
+    │   └── conversationController.js # Gestion des conversations
+    ├── db/               # Base de données
+    │   └── database.js   # Configuration SQLite et requêtes
+    ├── routes/           # Routes Express
+    │   ├── chatRoutes.js         # Routes du chat
+    │   └── conversationRoutes.js # Routes des conversations
+    ├── services/         # Services
+    │   └── llamaService.js # Service Llama
+    └── server.js         # Point d'entrée du serveur
+    ```
+
 ## API Backend
 
-### GET /conversations
+### Routes de Chat (`/routes/chatRoutes.js`)
 
--   **Description** : Récupère la liste des conversations avec leurs derniers messages
--   **Implémentation** : Utilise `queries.getConversations.all()` qui joint les tables conversations et messages
--   **Réponse** : Liste des conversations avec leurs IDs, titres, timestamps et derniers messages
+-   **POST /chat**
 
-### POST /conversations
+    -   Traite un nouveau message
+    -   Génère une réponse via Llama
+    -   Gère les versions des messages
 
--   **Description** : Crée une nouvelle conversation
--   **Implémentation** : Utilise `queries.insertConversation.run()` avec un titre vide et le timestamp actuel
--   **Réponse** : `{ id: <id_généré> }`
+-   **PUT /messages/:messageId**
 
-### GET /conversation/:id/latest-version
+    -   Modifie un message existant
+    -   Régénère la réponse
 
--   **Description** : Récupère le dernier groupe de versions d'une conversation
--   **Implémentation** : Utilise `queries.getLatestVersionGroup.get()`
--   **Réponse** : `{ versionId, timestamp }`
+-   **GET /messages/:messageId/versions**
+    -   Récupère les versions d'un message
 
-### GET /versions/:id/messages
+### Routes de Conversation (`/routes/conversationRoutes.js`)
 
--   **Description** : Récupère les messages d'un groupe de versions avec leurs points de divergence
--   **Implémentation** : Utilise `queries.getMessagesFromVersionGroup.all()` et analyse les divergences
--   **Réponse** : Liste des messages avec leurs versions alternatives
+-   **GET /conversations**
 
-### POST /chat
+    -   Liste toutes les conversations
 
--   **Description** : Traite un message utilisateur et génère une réponse
--   **Corps** : `{ message, conversationId, versionId }`
--   **Implémentation** :
-    -   Analyse NLP avec `extractEntities()`
-    -   Met à jour les informations utilisateur avec `updateUserInformation()`
-    -   Génère une réponse via le modèle Llama
-    -   Crée un nouveau groupe de versions
--   **Réponse** : `{ response, conversationId, userMessageId, assistantMessageId, versionId }`
+-   **POST /conversations**
 
-### PUT /messages/:messageId
+    -   Crée une nouvelle conversation
 
--   **Description** : Modifie un message existant
--   **Corps** : `{ content }`
--   **Implémentation** :
-    -   Crée un nouveau message avec le contenu modifié
-    -   Génère une nouvelle réponse de l'assistant
-    -   Crée un nouveau groupe de versions
--   **Réponse** : `{ messageId, assistantMessageId, versionId, timestamp, assistantResponse }`
+-   **GET /conversations/:id/latest-version**
 
-### GET /messages/:messageId/versions
+    -   Récupère la dernière version d'une conversation
 
--   **Description** : Récupère les versions d'un message
--   **Implémentation** : Utilise `getMessageVersionsWithValidation()` pour obtenir les versions valides
--   **Réponse** : `{ messageId, totalGroups, versionGroups }`
+-   **GET /versions/:id/messages**
 
-### DELETE /conversations/:id
+    -   Récupère les messages d'une version
 
--   **Description** : Supprime une conversation et toutes ses données associées
--   **Implémentation** : Utilise `deleteConversationAndRelated()` qui supprime en transaction :
-    -   Les associations message-version
-    -   Les versions
-    -   Les messages
-    -   Les informations utilisateur
-    -   La conversation
--   **Réponse** : `{ message: "Conversation supprimée avec succès" }`
+-   **DELETE /conversations/:id**
 
-### POST /reset/:id
+    -   Supprime une conversation
 
--   **Description** : Réinitialise une conversation en supprimant tous ses messages
--   **Implémentation** : Vérifie l'existence de la conversation puis utilise `queries.deleteMessages.run()`
--   **Réponse** : `{ message: "Session réinitialisée avec succès" }`
+-   **POST /reset/:id**
+    -   Réinitialise une conversation
 
 ## Configuration du modèle d'IA
 
-Le modèle est configuré avec les paramètres suivants :
+Le modèle est configuré dans `config/llamaConfig.js` avec les paramètres suivants :
 
 -   temperature: 0.55
 -   top_p: 0.92
@@ -164,28 +173,4 @@ node server.js
 cd frontend
 npm install
 npm start
-```
-
-## Structure des dossiers
-
-```
-.
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── ChatBox.jsx
-│   │   │   ├── Message.jsx
-│   │   │   └── MessageInput.jsx
-│   │   ├── styles/
-│   │   └── App.js
-│   └── package.json
-├── backend/
-│   ├── server.js
-│   ├── llamaConfig.js
-│   ├── database.js
-│   └── package.json
-├── models/
-│   └── llama-3.2-1b-instruct-q8_0.gguf
-└── llama.cpp/
-    └── llama-server.exe
 ```

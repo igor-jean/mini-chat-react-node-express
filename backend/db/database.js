@@ -2,7 +2,7 @@ import Database from 'better-sqlite3';
 import { encoding_for_model } from 'tiktoken';
 
 // Fonction utilitaire pour calculer le nombre de tokens
-function calculateTokens(text) {
+export function calculateTokens(text) {
     try {
         const encoder = encoding_for_model("gpt-3.5-turbo");
         const tokens = encoder.encode(text);
@@ -15,7 +15,7 @@ function calculateTokens(text) {
 }
 
 // Initialisation de la base de données
-const db = new Database('chat.db');
+export const db = new Database('chat.db');
 
 // Création des tables avec la structure modifiée
 db.exec(`
@@ -438,4 +438,4 @@ function insertAssistantMessage(conversationId, content, startTime) {
     );
 }
 
-export { db, queries, insertNewMessage, createNewVersionGroup, updateVersionGroup, calculateTokens, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated, getRelevantMessages, insertAssistantMessage };
+export { queries, insertNewMessage, createNewVersionGroup, updateVersionGroup, getMessageVersionsWithValidation, updateUserInformation, buildUserContext, deleteConversationAndRelated, getRelevantMessages, insertAssistantMessage };
