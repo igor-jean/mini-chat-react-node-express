@@ -5,12 +5,15 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 ## Fonctionnalités
 
 -   Interface de chat en temps réel
+-   Streaming des réponses de l'IA en temps réel
+-   Contrôle de la vitesse d'affichage du texte
 -   Gestion de multiples conversations
 -   Suppression de conversations
 -   Historique des messages par conversation
 -   Support de la coloration syntaxique pour le code
--   Modification des messages
+-   Modification des messages avec streaming de la nouvelle réponse
 -   Versionnage des messages
+-   Défilement automatique intelligent pendant le streaming
 
 ## Architecture
 
@@ -30,13 +33,13 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
     ```
     frontend/src/
     ├── components/          # Composants React
-    │   ├── ChatBox.jsx     # Affichage des messages
-    │   ├── Message.jsx     # Composant de message individuel
+    │   ├── ChatBox.jsx     # Affichage des messages avec gestion du défilement
+    │   ├── Message.jsx     # Composant de message avec support du streaming
     │   └── MessageInput.jsx # Saisie des messages
     ├── services/           # Services pour les appels API
-    │   └── api.js         # Configuration et fonctions d'appel API
+    │   └── api.js         # Configuration et fonctions d'appel API avec streaming
     ├── hooks/             # Hooks personnalisés
-    │   └── useChat.js     # Logique de gestion du chat
+    │   └── useChat.js     # Logique de gestion du chat et du streaming
     ├── styles/            # Styles globaux
     │   └── globals.css
     └── App.js             # Composant principal
@@ -57,20 +60,41 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
     ```
     backend/
     ├── config/            # Configuration
-    │   ├── llamaConfig.js # Configuration du modèle Llama
+    │   ├── llamaConfig.js # Configuration du modèle Llama et streaming
     │   └── nlpConfig.js   # Configuration NLP
     ├── controllers/       # Contrôleurs
-    │   ├── chatController.js      # Logique du chat
+    │   ├── chatController.js      # Logique du chat avec streaming SSE
     │   └── conversationController.js # Gestion des conversations
     ├── db/               # Base de données
     │   └── database.js   # Configuration SQLite et requêtes
     ├── routes/           # Routes Express
-    │   ├── chatRoutes.js         # Routes du chat
+    │   ├── chatRoutes.js         # Routes du chat avec support SSE
     │   └── conversationRoutes.js # Routes des conversations
     ├── services/         # Services
-    │   └── llamaService.js # Service Llama
+    │   └── llamaService.js # Service Llama avec streaming
     └── server.js         # Point d'entrée du serveur
     ```
+
+## Fonctionnement du Streaming
+
+### Backend
+
+-   Utilisation des Server-Sent Events (SSE) pour le streaming
+-   Génération progressive des réponses via l'API Llama
+-   Envoi des chunks de texte en temps réel au frontend
+
+### Frontend
+
+-   Gestion du streaming via l'API Fetch et ReadableStream
+-   Affichage progressif du texte avec délai configurable
+-   Défilement automatique intelligent pendant le streaming
+-   Support du streaming pour les nouveaux messages et les modifications
+
+### Configuration du Streaming
+
+-   Délai d'affichage configurable (DISPLAY_DELAY dans useChat.js)
+-   Défilement automatique intelligent pendant le streaming
+-   Gestion des états de streaming dans les composants
 
 ## API Backend
 

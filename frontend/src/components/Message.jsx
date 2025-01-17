@@ -18,6 +18,7 @@ import rehypeHighlight from 'rehype-highlight';
 //   - onMessageUpdate: fonction appelée lors de la modification d'un message
 //   - onVersionChange: fonction appelée lors du changement de version
 //   - conversationId: ID de la conversation
+//   - isStreaming: booléen indiquant si le message est en cours de streaming
 const Message = ({ 
   type, 
   content, 
@@ -31,7 +32,8 @@ const Message = ({
   isDivergencePoint = false,
   currentVersionId,
   onVersionChange,
-  conversationId
+  conversationId,
+  isStreaming
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(content);
@@ -80,6 +82,7 @@ const Message = ({
             ${type === 'user' 
               ? 'bg-primary' 
               : 'bg-secondary'}
+            ${isStreaming ? 'animate-pulse' : ''}
           `}>
             {type === 'user' && !isUpdating && (
               <div className="absolute right-1 bottom-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -106,12 +109,17 @@ const Message = ({
               </div>
             )}
             {type === 'assistant' ? (
-              <ReactMarkdown 
-                rehypePlugins={[rehypeHighlight]} 
-                className="prose prose-lg text-white prose-headings:text-white prose-p:text-white prose-strong:text-white"
-              >
-                {content}
-              </ReactMarkdown>
+              <>
+                <ReactMarkdown 
+                  rehypePlugins={[rehypeHighlight]} 
+                  className="prose prose-lg text-white prose-headings:text-white prose-p:text-white prose-strong:text-white"
+                >
+                  {content || ' '}
+                </ReactMarkdown>
+                {isStreaming && (
+                  <span className="inline-block w-1 h-4 ml-1 bg-white/80 animate-blink"></span>
+                )}
+              </>
             ) : (
               isEditing ? (
                 <textarea 

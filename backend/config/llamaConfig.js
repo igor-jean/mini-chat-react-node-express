@@ -2,7 +2,7 @@ export const SYSTEM_PROMPT = `Vous êtes un assistant IA serviable, intelligent,
 
 export const LLAMA_PARAMS = {
     temperature: 0.55,
-    cpu_threads: 4,
+    cpu_threads: 8,
     top_p: 0.92,
     min_p: 0.05,
     top_k: 40,
@@ -12,7 +12,8 @@ export const LLAMA_PARAMS = {
     repeat_penalty: 1.15,
     presence_penalty: 0.35,
     frequency_penalty: 0.35,
-    stop: ["<|eot_id|>", "<|start_header_id|>"]
+    stop: ["<|eot_id|>", "<|start_header_id|>"],
+    n_batch: 512
 };
 
 export function buildPrompt(conversationContext, userMessage) {

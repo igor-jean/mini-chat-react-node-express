@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import Message from './Message';
-import ClipLoader from 'react-spinners/ClipLoader';
 
 // Composant ChatBox qui affiche la liste des messages et gère le défilement automatique
 // props:
@@ -17,21 +16,29 @@ const ChatBox = ({
   currentVersionId,
   onVersionChange 
 }) => {
-  // Référence vers le dernier élément pour gérer le défilement
   const messagesEndRef = useRef(null);
+  const containerRef = useRef(null);
 
-  // Fonction pour faire défiler la vue vers le dernier message
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (containerRef.current) {
+      const { scrollHeight, clientHeight } = containerRef.current;
+      containerRef.current.scrollTop = scrollHeight - clientHeight;
+    }
   };
 
-  // Effet qui déclenche le défilement à chaque nouveau message
+  // Défilement lors d'un nouveau message ou pendant le streaming
   useEffect(() => {
-    scrollToBottom();
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage && (lastMessage.isStreaming || lastMessage.type === 'user')) {
+      scrollToBottom();
+    }
   }, [messages]);
 
   return (
-    <div className="relative h-[700px] border border-border p-6 overflow-y-auto mb-5 bg-background shadow-sm">
+    <div 
+      ref={containerRef}
+      className="relative h-[700px] border border-border p-6 overflow-y-auto mb-5 bg-background shadow-sm"
+    >
       {messages.map((message, index) => (
         <Message 
           key={index}
@@ -40,7 +47,7 @@ const ChatBox = ({
           responseTime={message.responseTime}
           nbTokens={message.nbTokens}
           timestamp={message.timestamp}
-          showSpinner={message.type === 'assistant' && message.content === 'En train de réfléchir...'}
+          showSpinner={message.type === 'assistant' && !message.content && !message.isStreaming}
           conversationId={currentConversationId}
           ordre={message.ordre}
           messageId={message.messageId}
@@ -49,9 +56,9 @@ const ChatBox = ({
           availableVersions={message.availableVersions || []}
           currentVersionId={currentVersionId}
           onVersionChange={onVersionChange}
+          isStreaming={message.isStreaming}
         />
       ))}
-      <div ref={messagesEndRef} />
     </div>
   );
 };

@@ -21,6 +21,12 @@ export const handleChat = async (req, res) => {
         const now = new Date().toISOString();
         const startTime = Date.now();
 
+        // Configuration du streaming
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+
         console.log('\n=== Nouvelle requête chat ===');
         console.log('Timestamp:', new Date(now).toLocaleString('fr-FR'));
         console.log('Message reçu:', message);
@@ -70,11 +76,23 @@ export const handleChat = async (req, res) => {
             conversationContext += messageContexts.join('\n');
         }
 
-        const response = await generateLlamaResponse(conversationContext, message);
+        let fullResponse = '';
+        try {
+            const responseGenerator = generateLlamaResponse(conversationContext, message);
+            
+            for await (const chunk of responseGenerator) {
+                fullResponse += chunk;
+                res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la génération de la réponse:', error);
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            return res.end();
+        }
         
         const assistantMessageId = insertAssistantMessage(
             conversationId,
-            response,
+            fullResponse,
             startTime
         );
 
@@ -95,19 +113,22 @@ export const handleChat = async (req, res) => {
         
         queries.updateConversationTimestamp.run(now, conversationId);
 
-        res.json({ 
-            response,
+        res.write(`data: ${JSON.stringify({ 
+            done: true,
             conversationId,
             userMessageId,
             assistantMessageId,
             versionId: finalVersionId
-        });
+        })}\n\n`);
+        
+        res.end();
     } catch (error) {
         console.error('Erreur:', error);
-        res.status(500).json({ 
+        res.write(`data: ${JSON.stringify({ 
             error: 'Erreur lors de l\'exécution',
             details: error.message 
-        });
+        })}\n\n`);
+        res.end();
     }
 };
 
@@ -118,6 +139,12 @@ export const handleMessageUpdate = async (req, res) => {
         const now = new Date().toISOString();
         const startTime = Date.now();
 
+        // Configuration du streaming
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no');
+
         const originalMessage = db.prepare(`
             SELECT conversation_id, ordre, role
             FROM messages 
@@ -125,19 +152,22 @@ export const handleMessageUpdate = async (req, res) => {
         `).get(messageId);
 
         if (!originalMessage) {
-            return res.status(404).json({ error: 'Message non trouvé' });
+            res.write(`data: ${JSON.stringify({ error: 'Message non trouvé' })}\n\n`);
+            return res.end();
         }
 
         const currentVersion = queries.getLatestVersionGroup.get(originalMessage.conversation_id);
         if (!currentVersion) {
-            return res.status(404).json({ error: 'Groupe de versions non trouvé' });
+            res.write(`data: ${JSON.stringify({ error: 'Groupe de versions non trouvé' })}\n\n`);
+            return res.end();
         }
 
         const currentGroup = JSON.parse(currentVersion.version_group);
         const messageIndex = currentGroup.indexOf(parseInt(messageId));
 
         if (messageIndex === -1) {
-            return res.status(404).json({ error: 'Message non trouvé dans le groupe de versions' });
+            res.write(`data: ${JSON.stringify({ error: 'Message non trouvé dans le groupe de versions' })}\n\n`);
+            return res.end();
         }
 
         const nbTokens = calculateTokens(content);
@@ -166,13 +196,25 @@ export const handleMessageUpdate = async (req, res) => {
             .map(msg => `<|start_header_id|>${msg.role}<|end_header_id|>${msg.content}<|eot_id|>`)
             .join('\n');
 
-        const response = await generateLlamaResponse(conversationContext, content);
+        let fullResponse = '';
+        try {
+            const responseGenerator = generateLlamaResponse(conversationContext, content);
+            
+            for await (const chunk of responseGenerator) {
+                fullResponse += chunk;
+                res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+            }
+        } catch (error) {
+            console.error('Erreur lors de la génération de la réponse:', error);
+            res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+            return res.end();
+        }
 
-        const assistantNbTokens = calculateTokens(response);
+        const assistantNbTokens = calculateTokens(fullResponse);
         const assistantMessageId = queries.insertMessage.run(
             originalMessage.conversation_id,
             'assistant',
-            response,
+            fullResponse,
             now,
             originalMessage.ordre + 1,
             assistantNbTokens,
@@ -183,18 +225,22 @@ export const handleMessageUpdate = async (req, res) => {
 
         const finalVersionId = createNewVersionGroup(originalMessage.conversation_id, newGroup);
 
-        res.json({ 
+        res.write(`data: ${JSON.stringify({ 
+            done: true,
             messageId: newMessageId,
             assistantMessageId,
             versionId: finalVersionId,
-            timestamp: now,
-            assistantResponse: response
-        });
+            timestamp: now
+        })}\n\n`);
+        
+        res.end();
     } catch (error) {
-        res.status(500).json({ 
+        console.error('Erreur:', error);
+        res.write(`data: ${JSON.stringify({ 
             error: 'Erreur lors de la modification',
             details: error.message 
-        });
+        })}\n\n`);
+        res.end();
     }
 };
 

@@ -1,12 +1,19 @@
 import { useState, useEffect } from 'react';
 import { chatService, conversationService } from '../services/api';
 
+// Délai en millisecondes entre chaque chunk de texte pour contrôler la vitesse d'affichage du streaming
+const DISPLAY_DELAY = 50;
+
+// Fonction utilitaire pour créer un délai artificiel entre les chunks de texte
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 export const useChat = () => {
     const [messages, setMessages] = useState([]);
     const [conversations, setConversations] = useState([]);
     const [currentConversationId, setCurrentConversationId] = useState(null);
     const [isLoading, setIsLoading] = useState(false);
     const [currentVersionId, setCurrentVersionId] = useState(null);
+    const [displaySpeed, setDisplaySpeed] = useState(DISPLAY_DELAY);
 
     useEffect(() => {
         fetchConversations();
@@ -81,6 +88,12 @@ export const useChat = () => {
         }
     };
 
+    // Fonction qui applique un délai avant d'afficher chaque chunk de texte
+    const handleChunkWithDelay = async (chunk, updateFn) => {
+        await delay(displaySpeed);
+        await updateFn(chunk);
+    };
+
     const handleSendMessage = async (message) => {
         setIsLoading(true);
         const timestamp = new Date().toLocaleTimeString('fr-FR', {
@@ -94,8 +107,9 @@ export const useChat = () => {
             timestamp: timestamp
         }, {
             type: 'assistant',
-            content: 'En train de réfléchir...',
-            timestamp: timestamp
+            content: '',
+            timestamp: timestamp,
+            isStreaming: true  // Indique que ce message est en cours de streaming
         }]);
 
         try {
@@ -108,48 +122,79 @@ export const useChat = () => {
                 setCurrentVersionId(null);
             }
 
-            const data = await chatService.sendMessage(message, conversationId, currentVersionId);
-            setCurrentVersionId(data.versionId);
-            
-            const messagesData = await conversationService.getVersionMessages(data.versionId);
-            if (messagesData.messages) {
-                const formattedMessages = await Promise.all(messagesData.messages.map(async msg => {
-                    let versionGroups = [];
-                    if (msg.isDivergencePoint) {
-                        try {
-                            const versionsData = await chatService.getMessageVersions(msg.id);
-                            if (versionsData.versionGroups && Array.isArray(versionsData.versionGroups)) {
-                                versionGroups = versionsData.versionGroups.map(group => ({
-                                    content: group.content || '',
-                                    versions: Array.isArray(group.versions) ? group.versions.map(v => ({
-                                        versionId: v.versionId,
-                                        timestamp: v.timestamp
-                                    })) : []
-                                })).filter(group => group.versions.length > 0);
+            // Gestionnaire de chunks pour le streaming
+            const handleChunk = async (chunk) => {
+                const updateMessage = async (text) => {
+                    return new Promise(resolve => {
+                        setMessages(prev => {
+                            const newMessages = [...prev];
+                            const lastMessage = newMessages[newMessages.length - 1];
+                            if (lastMessage && lastMessage.type === 'assistant') {
+                                return [...prev.slice(0, -1), {
+                                    ...lastMessage,
+                                    content: lastMessage.content + text  // Ajouter progressivement le texte
+                                }];
                             }
-                        } catch (error) {
-                            versionGroups = [];
-                        }
-                    }
-                    return {
-                        type: msg.role,
-                        content: msg.content,
-                        timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                        }),
-                        ordre: msg.ordre,
-                        messageId: msg.id,
-                        isDivergencePoint: msg.isDivergencePoint,
-                        availableVersions: msg.availableVersions || [],
-                        responseTime: msg.response_time,
-                        nbTokens: msg.nb_tokens
-                    };
-                }));
-                setMessages(formattedMessages);
-            }
+                            return prev;
+                        });
+                        resolve();
+                    });
+                };
 
-            await fetchConversations();
+                await handleChunkWithDelay(chunk, updateMessage);
+            };
+
+            const messageInfo = await chatService.sendMessage(
+                message, 
+                conversationId, 
+                currentVersionId,
+                handleChunk
+            );
+
+            if (messageInfo) {
+                setCurrentVersionId(messageInfo.versionId);
+                
+                const messagesData = await conversationService.getVersionMessages(messageInfo.versionId);
+                if (messagesData.messages) {
+                    const formattedMessages = await Promise.all(messagesData.messages.map(async msg => {
+                        let versionGroups = [];
+                        if (msg.isDivergencePoint) {
+                            try {
+                                const versionsData = await chatService.getMessageVersions(msg.id);
+                                if (versionsData.versionGroups && Array.isArray(versionsData.versionGroups)) {
+                                    versionGroups = versionsData.versionGroups.map(group => ({
+                                        content: group.content || '',
+                                        versions: Array.isArray(group.versions) ? group.versions.map(v => ({
+                                            versionId: v.versionId,
+                                            timestamp: v.timestamp
+                                        })) : []
+                                    })).filter(group => group.versions.length > 0);
+                                }
+                            } catch (error) {
+                                versionGroups = [];
+                            }
+                        }
+                        return {
+                            type: msg.role,
+                            content: msg.content,
+                            timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                            }),
+                            ordre: msg.ordre,
+                            messageId: msg.id,
+                            isDivergencePoint: msg.isDivergencePoint,
+                            availableVersions: msg.availableVersions || [],
+                            responseTime: msg.response_time,
+                            nbTokens: msg.nb_tokens,
+                            isStreaming: false
+                        };
+                    }));
+                    setMessages(formattedMessages);
+                }
+
+                await fetchConversations();
+            }
         } catch (error) {
             const errorTimestamp = new Date().toLocaleTimeString('fr-FR', {
                 hour: '2-digit',
@@ -161,7 +206,8 @@ export const useChat = () => {
                 newMessages[newMessages.length - 1] = { 
                     type: 'assistant', 
                     content: 'Désolé, une erreur est survenue.',
-                    timestamp: errorTimestamp
+                    timestamp: errorTimestamp,
+                    isStreaming: false
                 };
                 return newMessages;
             });
@@ -172,29 +218,93 @@ export const useChat = () => {
 
     const handleMessageUpdate = async (messageId, newContent) => {
         try {
-            const data = await chatService.updateMessage(messageId, newContent);
-            setCurrentVersionId(data.versionId);
-            
-            const messagesData = await conversationService.getVersionMessages(data.versionId);
-            if (messagesData.messages) {
-                const formattedMessages = messagesData.messages.map(msg => ({
-                    type: msg.role,
-                    content: msg.content,
-                    timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
-                        hour: '2-digit',
-                        minute: '2-digit',
-                    }),
-                    ordre: msg.ordre,
-                    messageId: msg.id,
-                    isDivergencePoint: msg.isDivergencePoint,
-                    availableVersions: msg.availableVersions || [],
-                    responseTime: msg.response_time,
-                    nbTokens: msg.nb_tokens
-                }));
-                setMessages(formattedMessages);
+            setMessages(prev => {
+                const newMessages = [...prev];
+                const messageIndex = newMessages.findIndex(msg => msg.messageId === messageId);
+                if (messageIndex !== -1) {
+                    // Garder seulement les messages jusqu'au message modifié et préparer pour le streaming
+                    const truncatedMessages = newMessages.slice(0, messageIndex + 1);
+                    truncatedMessages[messageIndex] = {
+                        ...truncatedMessages[messageIndex],
+                        content: newContent
+                    };
+                    // Ajouter un nouveau message assistant vide pour le streaming
+                    return [...truncatedMessages, {
+                        type: 'assistant',
+                        content: '',
+                        timestamp: new Date().toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        }),
+                        isStreaming: true  // Indique que ce message est en cours de streaming
+                    }];
+                }
+                return newMessages;
+            });
+
+            const handleChunk = async (chunk) => {
+                const updateMessage = (text) => {
+                    setMessages(prev => {
+                        const newMessages = [...prev];
+                        const lastMessage = newMessages[newMessages.length - 1];
+                        if (lastMessage && lastMessage.type === 'assistant') {
+                            return [...prev.slice(0, -1), {
+                                ...lastMessage,
+                                content: lastMessage.content + text
+                            }];
+                        }
+                        return newMessages;
+                    });
+                };
+
+                await handleChunkWithDelay(chunk, updateMessage);
+            };
+
+            const data = await chatService.updateMessage(messageId, newContent, handleChunk);
+            if (data) {
+                setCurrentVersionId(data.versionId);
+                
+                const messagesData = await conversationService.getVersionMessages(data.versionId);
+                if (messagesData.messages) {
+                    const formattedMessages = messagesData.messages.map(msg => ({
+                        type: msg.role,
+                        content: msg.content,
+                        timestamp: new Date(msg.timestamp).toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        }),
+                        ordre: msg.ordre,
+                        messageId: msg.id,
+                        isDivergencePoint: msg.isDivergencePoint,
+                        availableVersions: msg.availableVersions || [],
+                        responseTime: msg.response_time,
+                        nbTokens: msg.nb_tokens,
+                        isStreaming: false
+                    }));
+                    setMessages(formattedMessages);
+                }
             }
         } catch (error) {
-            // Erreur silencieuse
+            console.error('Erreur lors de la modification du message:', error);
+            setMessages(prev => {
+                const newMessages = [...prev];
+                const messageIndex = newMessages.findIndex(msg => msg.messageId === messageId);
+                if (messageIndex !== -1) {
+                    // En cas d'erreur, garder seulement jusqu'au message d'erreur
+                    const truncatedMessages = newMessages.slice(0, messageIndex + 2);
+                    truncatedMessages[messageIndex + 1] = {
+                        type: 'assistant',
+                        content: 'Désolé, une erreur est survenue.',
+                        timestamp: new Date().toLocaleTimeString('fr-FR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                        }),
+                        isStreaming: false
+                    };
+                    return truncatedMessages;
+                }
+                return newMessages;
+            });
         }
     };
 
@@ -288,6 +398,8 @@ export const useChat = () => {
         createNewConversation,
         deleteConversation,
         setCurrentConversationId,
-        updateConversationTitle
+        updateConversationTitle,
+        displaySpeed,
+        setDisplaySpeed
     };
 }; 
