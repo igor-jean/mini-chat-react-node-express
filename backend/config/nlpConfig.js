@@ -11,13 +11,12 @@ const manager = new NlpManager({
 async function setupEntities() {
     // Ajout des patterns pour la détection des entités
     manager.addRegexEntity('age', 'fr', /\b([1-9][0-9]?|1[01][0-9]|120)\b(?:\s*ans?)?/i);
-    manager.addRegexEntity('email', 'fr', /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
 
     // Patterns pour la détection des noms
     const namePatterns = [
         'je m\'appelle (.*?)(?=\\s|$|,|\\.|et)',
-        'mon nom est (.*?)(?=\\s|$|,|\\.|et)',
-        'je suis (.*?)(?=\\s|$|,|\\.|et)',
+        'mon nom est (.*?)(?=\\s|$|,|\\.|et)', 
+        'mon prénom est (.*?)(?=\\s|$|,|\\.|et)',
         'c\'est moi (.*?)(?=\\s|$|,|\\.|et)'
     ];
 
@@ -39,9 +38,6 @@ async function setupEntities() {
     cityPatterns.forEach(pattern => {
         manager.addRegexEntity('ville', 'fr', new RegExp(pattern, 'i'));
     });
-
-    // Entraînement du modèle
-    await manager.train();
 }
 
 // Fonction pour nettoyer le texte extrait
@@ -73,12 +69,6 @@ async function extractEntities(text) {
         entities.ville = cleanExtractedText(villeMatch[1]);
     }
 
-    // Extraction de l'email
-    const emailMatch = text.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
-    if (emailMatch) {
-        entities.email = emailMatch[0];
-    }
-
     // Log pour le débogage
     console.log('\n=== Entités détectées ===');
     if (Object.keys(entities).length > 0) {
@@ -92,7 +82,6 @@ async function extractEntities(text) {
 
     return {
         entities,
-        sentiment: result.sentiment,
         language: result.language
     };
 }

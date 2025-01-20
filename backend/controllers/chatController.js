@@ -15,6 +15,14 @@ import {
     getMessageVersionsWithValidation
 } from '../db/database.js';
 
+/**
+ * Gère le traitement des messages du chat en temps réel
+ * - Analyse le message avec NLP pour extraire les entités
+ * - Gère le contexte de la conversation
+ * - Génère une réponse via le modèle LLaMA
+ * - Gère le système de versions des messages
+ * - Envoie la réponse en streaming
+ */
 export const handleChat = async (req, res) => {
     try {
         let { message, conversationId, versionId } = req.body;
@@ -132,6 +140,13 @@ export const handleChat = async (req, res) => {
     }
 };
 
+/**
+ * Gère la mise à jour d'un message existant
+ * - Crée une nouvelle version du message
+ * - Régénère la réponse de l'assistant
+ * - Maintient l'historique des versions
+ * - Envoie la nouvelle réponse en streaming
+ */
 export const handleMessageUpdate = async (req, res) => {
     try {
         const { messageId } = req.params;
@@ -244,6 +259,12 @@ export const handleMessageUpdate = async (req, res) => {
     }
 };
 
+/**
+ * Récupère l'historique des versions d'un message
+ * - Retourne toutes les versions d'un message spécifique
+ * - Valide l'intégrité des versions
+ * - Fournit les métadonnées associées à chaque version
+ */
 export const getMessageVersions = async (req, res) => {
     try {
         const { messageId } = req.params;

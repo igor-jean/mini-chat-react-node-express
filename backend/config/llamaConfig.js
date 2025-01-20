@@ -1,7 +1,7 @@
 export const SYSTEM_PROMPT = `Vous êtes un assistant IA serviable, intelligent, aimable et efficace. Vous répondez toujours aux demandes des utilisateurs au mieux de vos capacités.`;
 
 export const LLAMA_PARAMS = {
-    temperature: 0.55,
+    temperature: 0.3,
     cpu_threads: 8,
     top_p: 0.92,
     min_p: 0.05,

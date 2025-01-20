@@ -143,15 +143,15 @@ Une application de chat minimaliste utilisant React pour le frontend et Node.js/
 
 Le modèle est configuré dans `config/llamaConfig.js` avec les paramètres suivants :
 
--   temperature: 0.55
--   top_p: 0.92
--   min_p: 0.05
--   top_k: 40
--   n_predict: 2048
--   truncation_length: 8192
--   repeat_penalty: 1.15
--   presence_penalty: 0.35
--   frequency_penalty: 0.35
+-   temperature: 0.3 # Contrôle la créativité/randomisation des réponses (plus élevé = plus aléatoire)
+-   top_p: 0.92 # Sampling avec noyau dynamique (seuil de probabilité cumulée)
+-   min_p: 0.05 # Probabilité minimale pour qu'un token soit considéré
+-   top_k: 40 # Nombre maximum de tokens considérés à chaque étape
+-   n_predict: 2048 # Nombre maximum de tokens à générer
+-   truncation_length: 8192 # Longueur maximale du contexte en tokens
+-   repeat_penalty: 1.15 # Pénalité pour la répétition de tokens
+-   presence_penalty: 0.35 # Pénalise les tokens déjà présents dans le texte
+-   frequency_penalty: 0.35 # Pénalise les tokens fréquemment utilisés
 
 ## Installation
 

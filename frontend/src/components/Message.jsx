@@ -62,7 +62,7 @@ const Message = ({
 
   return (
     <div className={`flex flex-col ${type === 'user' ? 'items-end' : 'items-start'} mb-3`}>
-      <div className={`flex ${type === 'user' ? 'justify-end' : 'justify-start'} items-end`}>
+      <div className={`flex ${type === 'user' ? 'justify-end' : 'justify-start'} `}>
         {type === 'assistant' && (
           <div className="flex flex-col items-center mr-2">
             <div className="w-8 h-8 rounded-full bg-secondary/20 flex items-center justify-center">
@@ -76,7 +76,7 @@ const Message = ({
           </div>
         )}
 
-        <div className="flex flex-col max-w-[70%]">
+        <div className="flex flex-col max-w-full">
           <div className={`
             px-4 py-3 rounded-[0.5rem] text-white relative group
             ${type === 'user' 

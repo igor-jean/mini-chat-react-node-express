@@ -3,7 +3,7 @@ import { handleChat, handleMessageUpdate, getMessageVersions } from '../controll
 
 const router = express.Router();
 
-// Route de chat avec support du streaming SSE (Server-Sent Events)
+// Route de chat
 router.post('/chat', handleChat);
 router.put('/messages/:messageId', handleMessageUpdate);
 router.get('/messages/:messageId/versions', getMessageVersions);

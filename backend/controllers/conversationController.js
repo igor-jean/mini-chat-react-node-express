@@ -1,5 +1,10 @@
 import { queries, deleteConversationAndRelated, db } from '../db/database.js';
 
+/**
+ * Récupère toutes les conversations existantes
+ * - Retourne la liste complète des conversations
+ * - Gère les erreurs de récupération
+ */
 export const getConversations = (req, res) => {
     try {
         const conversations = queries.getConversations.all();
@@ -13,6 +18,11 @@ export const getConversations = (req, res) => {
     }
 };
 
+/**
+ * Crée une nouvelle conversation
+ * - Initialise une conversation vide avec un horodatage
+ * - Retourne l'ID de la nouvelle conversation créée
+ */
 export const createConversation = (req, res) => {
     try {
         const now = new Date().toISOString();
@@ -28,6 +38,12 @@ export const createConversation = (req, res) => {
     }
 };
 
+/**
+ * Récupère la dernière version d'une conversation
+ * - Identifie le groupe de versions le plus récent
+ * - Retourne l'ID de version et l'horodatage
+ * - Gère le cas où aucune version n'existe
+ */
 export const getLatestVersion = (req, res) => {
     try {
         const conversationId = req.params.id;
@@ -50,6 +66,13 @@ export const getLatestVersion = (req, res) => {
     }
 };
 
+/**
+ * Récupère les messages d'une version spécifique
+ * - Extrait tous les messages associés à une version
+ * - Identifie les points de divergence dans l'historique
+ * - Fournit les versions alternatives disponibles
+ * - Gère la structure complexe des versions et divergences
+ */
 export const getVersionMessages = (req, res) => {
     try {
         const versionId = req.params.id;
@@ -138,6 +161,12 @@ export const getVersionMessages = (req, res) => {
     }
 };
 
+/**
+ * Supprime une conversation et ses données associées
+ * - Efface la conversation et tous ses messages
+ * - Nettoie les versions et relations associées
+ * - Assure une suppression complète et cohérente
+ */
 export const deleteConversation = (req, res) => {
     try {
         const conversationId = req.params.id;
@@ -152,6 +181,12 @@ export const deleteConversation = (req, res) => {
     }
 };
 
+/**
+ * Met à jour le titre d'une conversation
+ * - Valide que le titre n'est pas vide
+ * - Met à jour le titre dans la base de données
+ * - Retourne le nouveau titre après mise à jour
+ */
 export const updateConversationTitle = (req, res) => {
     try {
         const conversationId = req.params.id;

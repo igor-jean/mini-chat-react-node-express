@@ -3,6 +3,20 @@ import { LLAMA_PARAMS, buildPrompt } from '../config/llamaConfig.js';
 import { calculateTokens } from '../db/database.js';
 import { Readable } from 'stream';
 
+/**
+ * Génère une réponse via le modèle LLaMA en streaming
+ * - Construit le prompt avec le contexte de la conversation
+ * - Calcule et affiche les informations de tokens
+ * - Établit une connexion SSE avec le serveur LLaMA
+ * - Traite la réponse en streaming avec gestion du buffer
+ *   (Le buffer est une zone mémoire temporaire qui stocke les données
+ *    partielles reçues du stream jusqu'à ce qu'une ligne complète soit disponible)
+ * - Nettoie la réponse des balises spéciales avant de la retourner
+ * @param {string} conversationContext - Le contexte de la conversation
+ * @param {string} userMessage - Le message de l'utilisateur
+ * @yields {string} Fragments de la réponse en streaming
+ * @returns {string} La réponse complète nettoyée
+ */
 export const generateLlamaResponse = async function* (conversationContext, userMessage) {
     const fullPrompt = buildPrompt(conversationContext, userMessage);
 
